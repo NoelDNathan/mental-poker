@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Mental Poker</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <h1 id="mental-poker">Mental Poker</h1>
+<h2 id="introduction">Introduction</h2>
+<p>The library implements the mental poker protocol described in <a href="https://www.semanticscholar.org/paper/Mental-Poker-Revisited-Barnett-Smart/8aaa1245c5876c78564c3f2df36ca615686d1402">Mental Poker Revisited</a>.</p>
+<p>The protocol depends on an elliptic curve, without further requirements such as high 2-adicity of its scalar field or being pairing-friendly. This allows it to run in diverse environments, such as L2s and SNARKs.</p>
+<p>A series of posts explaining the protocol and our approach to implementing it are available in the <a href="https://geometryresearch.xyz/notebook">Geometry Notebook</a>. <a href="https://geometryresearch.xyz/notebook/mental-poker-in-the-age-of-snarks-part-1">Part 1</a> covers the protocol and primitives from a high level, <a href="https://geometryresearch.xyz/notebook/mental-poker-in-the-age-of-snarks-part-2">Part 2</a> goes into some of the math.</p>
+<h2 id="matchbox-collaboration">Matchbox collaboration</h2>
+<p>This library is developed as part of the collaboration between Geometry and Matchbox, and is designated as Geometry - MatchBox Proof 1.</p>
+<h2 id="running-the-example">Running the example</h2>
+<p>An example showing how to encode, hide, shuffle and distribute cards is provided under <a href="https://github.com/geometryresearch/mental-poker/blob/main/barnett-smart-card-protocol/examples/round.rs"><code>mental-poker/barnett-smart-card-protocol/examples/round.rs</code></a>. Run the example by running:</p>
+<pre><code>cargo run --example round
+</code></pre>
+<h2 id="license">License</h2>
+<p>© 2022 <a href="https://geometryresearch.xyz">Geometry</a>.</p>
+<p>This project is licensed under either of</p>
+<ul>
+<li><a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a> (<a href="LICENSE-APACHE"><code>LICENSE-APACHE</code></a>)</li>
+<li><a href="https://opensource.org/licenses/MIT">MIT license</a> (<a href="LICENSE-MIT"><code>LICENSE-MIT</code></a>)</li>
+</ul>
+<p>at your option.</p>
+<p>The <a href="https://spdx.dev">SPDX</a> license identifier for this project is <code>MIT OR Apache-2.0</code>.</p>
+
+            
+            
+        </body>
+        </html>
