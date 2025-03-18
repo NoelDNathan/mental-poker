@@ -9,6 +9,9 @@ pub enum CardProtocolError {
 
     #[error("IoError: {0}")]
     IoError(String),
+
+    #[error("Other: {0}")]
+    Other(String),
 }
 
 impl From<std::io::Error> for CardProtocolError {

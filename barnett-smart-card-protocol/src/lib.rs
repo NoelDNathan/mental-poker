@@ -1,12 +1,16 @@
 use crate::error::CardProtocolError;
-
+use ark_ec::ProjectiveCurve;
 use ark_ff::{Field, ToBytes};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::Rng;
+use ark_bn254::Fr;
+use discrete_log_cards::MaskedCard;
+use num::BigUint;
 use proof_essentials::error::CryptoError;
 use proof_essentials::homomorphic_encryption::HomomorphicEncryptionScheme;
 use proof_essentials::utils::permutation::Permutation;
 use proof_essentials::vector_commitment::HomomorphicCommitmentScheme;
+use zk_reshuffle::CircomProver;
 use std::hash::Hash;
 use std::ops::{Add, Mul};
 
@@ -47,6 +51,7 @@ pub trait BarnettSmartProtocol {
     type AggregatePublicKey: CanonicalDeserialize + CanonicalSerialize;
     type Enc: HomomorphicEncryptionScheme<Self::Scalar>;
     type Comm: HomomorphicCommitmentScheme<Self::Scalar>;
+    type Point: ProjectiveCurve;
 
     // Cards
     type Card: Copy
@@ -69,10 +74,12 @@ pub trait BarnettSmartProtocol {
     type ZKProofRemasking: CanonicalDeserialize + CanonicalSerialize;
     type ZKProofReveal: CanonicalDeserialize + CanonicalSerialize;
     type ZKProofShuffle: CanonicalDeserialize + CanonicalSerialize;
+    type ZKProofCardRemoval;
 
     /// Randomly produce the scheme parameters
     fn setup<R: Rng>(
         rng: &mut R,
+        generator: <Self::Point as ProjectiveCurve>::Affine,
         m: usize,
         n: usize,
     ) -> Result<Self::Parameters, CardProtocolError>;
@@ -175,6 +182,16 @@ pub trait BarnettSmartProtocol {
         )>,
         masked_card: &Self::MaskedCard,
     ) -> Result<Self::Card, CardProtocolError>;
+    
+    fn partial_unmask(
+        pp: &Self::Parameters,
+        decryption_key: &Vec<(
+            Self::RevealToken,
+            Self::ZKProofReveal,
+            Self::PlayerPublicKey,
+        )>,
+        masked_card: &Self::MaskedCard,
+    ) -> Result<Self::MaskedCard, CardProtocolError>;
 
     /// Shuffle and remask a deck of masked cards using a player-chosen permutation and vector of
     /// masking factors.
@@ -195,4 +212,32 @@ pub trait BarnettSmartProtocol {
         shuffled_deck: &Vec<Self::MaskedCard>,
         proof: &Self::ZKProofShuffle,
     ) -> Result<(), CryptoError>;
+
+    fn parse_and_convert_to_decimal(input: &str) -> BigUint;
+
+    fn to_hex(point: Self::Point) -> [BigUint; 2];
+
+    fn remask_for_reshuffle(
+        prover: &mut CircomProver,
+        r_prime: &mut Vec<Self::Scalar>,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        deck: &Vec<Self::MaskedCard>,
+        player_cards: &Vec<Option<Self::MaskedCard>>,
+        sk: &Self::PlayerSecretKey,
+        pk: &Self::PlayerPublicKey,
+        m_list: &Vec<Self::Card>,
+    ) -> Result<(Vec<Fr>, Self::ZKProofCardRemoval), CardProtocolError>;
+
+    fn verify_reshuffle_remask(
+        prover: &mut CircomProver,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        original_deck: &Vec<Self::MaskedCard>,
+        player_cards: &Vec<Self::MaskedCard>,
+        pk: &Self::PlayerPublicKey,
+        m_list: &Vec<Self::Card>,
+        public: Vec<Fr>,
+        proof: Self::ZKProofCardRemoval,
+    ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>;
 }

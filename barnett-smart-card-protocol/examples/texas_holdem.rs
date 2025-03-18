@@ -13,8 +13,11 @@ use std::iter::Iterator;
 use thiserror::Error;
 
 // Choose elliptic curve setting
-type Curve = starknet_curve::Projective;
-type Scalar = starknet_curve::Fr;
+
+use babyjubjub::{EdwardsProjective, Fr};
+
+type Curve = EdwardsProjective;
+type Scalar = Fr;
 
 // Instantiate concrete type for our card protocol
 type CardProtocol<'a> = discrete_log_cards::DLCards<'a, Curve>;
@@ -260,7 +263,6 @@ fn main() -> anyhow::Result<()> {
     // Crear una variable para las cartas comunitarias
     let mut community_cards: Vec<MaskedCard> = Vec::new();
 
-    
     let key_proof_info = players
         .iter()
         .map(|p| (p.pk, p.proof_key, p.name.clone()))
@@ -280,8 +282,6 @@ fn main() -> anyhow::Result<()> {
         .map(|x| x.0)
         .collect::<Vec<MaskedCard>>();
 
-    
-        
     // SHUFFLE TIME --------------
     // 1.a Andrija shuffles first
     let permutation = Permutation::new(rng, m * n);
@@ -399,9 +399,6 @@ fn main() -> anyhow::Result<()> {
     // El river: 1 carta comunitaria
     community_cards.push(deck[12]);
 
-
-
-    
     // Flop: las primeras tres cartas comunitarias
     let flop = vec![deck[8], deck[9], deck[10]];
     let mut flop_reveal_tokens = Vec::new();
@@ -430,9 +427,6 @@ fn main() -> anyhow::Result<()> {
     flop_reveal_tokens3.push(nico.compute_reveal_token(rng, &parameters, &deck[10])?);
     flop_reveal_tokens3.push(tom.compute_reveal_token(rng, &parameters, &deck[10])?);
 
-
-
-
     // Turn: la cuarta carta comunitaria
     let turn = vec![deck[11]];
     let mut turn_reveal_tokens = Vec::new();
@@ -442,7 +436,6 @@ fn main() -> anyhow::Result<()> {
         turn_reveal_tokens.push(nico.compute_reveal_token(rng, &parameters, card)?);
         turn_reveal_tokens.push(tom.compute_reveal_token(rng, &parameters, card)?);
     }
-
 
     // River: la quinta carta comunitaria
     let river = vec![deck[12]];
@@ -460,7 +453,7 @@ fn main() -> anyhow::Result<()> {
     let andrija_rt_5 = andrija.compute_reveal_token(rng, &parameters, &deck[5])?;
     let andrija_rt_6 = andrija.compute_reveal_token(rng, &parameters, &deck[6])?;
     let andrija_rt_7 = andrija.compute_reveal_token(rng, &parameters, &deck[7])?;
-    
+
     let kobi_rt_0 = kobi.compute_reveal_token(rng, &parameters, &deck[0])?;
     let kobi_rt_1 = kobi.compute_reveal_token(rng, &parameters, &deck[1])?;
     let kobi_rt_4 = kobi.compute_reveal_token(rng, &parameters, &deck[4])?;
@@ -528,7 +521,7 @@ fn main() -> anyhow::Result<()> {
     let andrija_rt_5 = andrija.compute_reveal_token(rng, &parameters, &deck[5])?;
     let andrija_rt_6 = andrija.compute_reveal_token(rng, &parameters, &deck[6])?;
     let andrija_rt_7 = andrija.compute_reveal_token(rng, &parameters, &deck[7])?;
-    
+
     let kobi_rt_0 = kobi.compute_reveal_token(rng, &parameters, &deck[0])?;
     let kobi_rt_1 = kobi.compute_reveal_token(rng, &parameters, &deck[1])?;
     let kobi_rt_4 = kobi.compute_reveal_token(rng, &parameters, &deck[4])?;
@@ -568,7 +561,7 @@ fn main() -> anyhow::Result<()> {
     let nico_card2 = open_card(&parameters, &rt_5, &card_mapping, &deck[5])?;
     let tom_card1 = open_card(&parameters, &rt_6, &card_mapping, &deck[6])?;
     let tom_card2 = open_card(&parameters, &rt_7, &card_mapping, &deck[7])?;
-    
+
     let cm_card1 = open_card(&parameters, &flop_reveal_tokens1, &card_mapping, &deck[8])?;
     let cm_card2 = open_card(&parameters, &flop_reveal_tokens2, &card_mapping, &deck[9])?;
     let cm_card3 = open_card(&parameters, &flop_reveal_tokens3, &card_mapping, &deck[10])?;
@@ -579,8 +572,11 @@ fn main() -> anyhow::Result<()> {
     println!("Kobi cards: {:?}, {:?}", kobi_card1, kobi_card2);
     println!("Nico cards: {:?}, {:?}", nico_card1, nico_card2);
     println!("Tom cards: {:?}, {:?}", tom_card1, tom_card2);
-    
-    println!("Community Cards: {:?} {:?} {:?} {:?} {:?}", cm_card1, cm_card2, cm_card3, cm_card4, cm_card5);
+
+    println!(
+        "Community Cards: {:?} {:?} {:?} {:?} {:?}",
+        cm_card1, cm_card2, cm_card3, cm_card4, cm_card5
+    );
     // println!("Community Cards: {:?} {:?}", cm_card4, cm_card5);
 
     Ok(())

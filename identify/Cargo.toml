@@ -1,0 +1,13 @@
+[package]
+name = "identify"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.release]
+release = false
+
+[dependencies]
+tokio = { version = "1.37.0", features = ["full"] }
+futures = "0.3.30"
+libp2p = { version = "0.54", features = ["identify", "macros", "noise", "ping", "rendezvous", "tcp", "tokio", "yamux"] }
+tracing-subscriber = {version  = "0.3.19", features = ["env-filter"]}
