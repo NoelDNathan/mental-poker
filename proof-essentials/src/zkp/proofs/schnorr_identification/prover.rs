@@ -37,7 +37,7 @@ where
             b"schnorr_identity",
             pp,
             statement,
-            random_commit
+            random_commit.to_string().as_bytes()
         ]?);
 
         let c = C::ScalarField::rand(fs_rng);

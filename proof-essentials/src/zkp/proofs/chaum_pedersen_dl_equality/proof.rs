@@ -15,9 +15,9 @@ pub struct Proof<C>
 where
     C: ProjectiveCurve,
 {
-    pub(crate) a: C,
-    pub(crate) b: C,
-    pub(crate) r: C::ScalarField,
+    pub a: C,
+    pub b: C,
+    pub r: C::ScalarField,
 }
 
 impl<C: ProjectiveCurve> Proof<C> {

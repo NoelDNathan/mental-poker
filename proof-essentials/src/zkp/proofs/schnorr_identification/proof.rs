@@ -14,8 +14,8 @@ pub struct Proof<C>
 where
     C: ProjectiveCurve,
 {
-    pub(crate) random_commit: C,
-    pub(crate) opening: C::ScalarField,
+    pub random_commit: C,
+    pub opening: C::ScalarField,
 }
 
 impl<C: ProjectiveCurve> Proof<C> {
@@ -29,8 +29,9 @@ impl<C: ProjectiveCurve> Proof<C> {
             b"schnorr_identity",
             pp,
             statement,
-            &self.random_commit
+            &self.random_commit.to_string().as_bytes()
         ]?);
+
 
         let c = C::ScalarField::rand(fs_rng);
 

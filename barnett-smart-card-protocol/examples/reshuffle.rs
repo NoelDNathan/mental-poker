@@ -260,6 +260,8 @@ async fn main() -> anyhow::Result<()> {
     let num_of_cards = m * n;
     let rng = &mut thread_rng();
 
+
+    
     let generator = EdwardsAffine::new(
         Fq::from_str(
             "5299619240641551281634865583518297030282874472190772894086521144482721001553",

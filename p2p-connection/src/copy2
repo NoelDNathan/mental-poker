@@ -115,7 +115,8 @@ pub struct P2PConnection {
     is_dealer: bool,
     listeners: Arc<Mutex<Events>>,
     swarm: Arc<Mutex<Swarm<MyBehaviour>>>,
-    from_swarm_tx: mpsc::Sender<(PeerId, ProtocolMessage)>,
+    from_swarm_tx: mpsc::Sender<(PeerId, ProtocolMessage)>,	
+    to_swarm_rx: mpsc::Receiver<(PeerId, ProtocolMessage)>,
 }
 
 // El comportamiento de red combina Gossipsub y mDNS
@@ -218,6 +219,7 @@ impl P2PConnection {
             listeners,
             swarm,
             from_swarm_tx,
+            to_swarm_rx,
         })
     }
 
@@ -232,18 +234,44 @@ impl P2PConnection {
             loop {
                 let mut swarm_guard = swarm.lock().await;
                 select! {
-                    event = swarm_guard.select_next_some() => {
-                        drop(swarm_guard);  // Evita deadlock
-                        match event {
-                            SwarmEvent::Behaviour(MyBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
-                                for (peer_id, _multiaddr) in list {
-                                    println!("mDNS discovered a new peer: {peer_id}");
-                                    swarm.lock().await.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
-                                    let peer_id_str = peer_id.to_string();
-                                    listeners.lock().await.emit("peer_discovered", &peer_id_str);
+                    // Procesar eventos de Swarm
+                    event = swarm_guard.select_next_some() => match event {
+                        SwarmEvent::Behaviour(MyBehaviourEvent::Gossipsub(gossipsub::Event::Message {
+                            propagation_source: peer_id,
+                            message_id: _id,
+                            message,
+                        })) => {
+                            println!("📩 Mensaje recibido de {}: {:?}", peer_id, message.data);
+                            match serde_json::from_slice::<ProtocolMessage>(&message.data) {
+                                Ok(protocol_message) => {
+                                    if let Err(e) = from_swarm_tx.try_send((peer_id, protocol_message)) {
+                                        println!("❌ Error enviando mensaje al canal interno: {:?}", e);
+                                    }
                                 }
-                            },
-                            _ => {}
+                                Err(e) => println!("❌ Error deserializando mensaje: {:?}", e),
+                            }
+                        }
+                        SwarmEvent::Behaviour(MyBehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
+                            for (peer_id, _) in peers {
+                                println!("🎉 Nuevo peer descubierto: {}", peer_id);
+                                swarm_guard.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
+                                listeners.lock().await.emit("peer_discovered", &peer_id.to_string());
+                            }
+                        }
+                        _ => {}
+                    },
+                
+                    // 💡 NUEVO: Escuchar el canal `to_swarm_rx` para reenviar mensajes a la red
+                    message = to_swarm_rx.next() => {
+                        if let Some(msg) = message {
+                            let topic = IdentTopic::new("texas-holdem");
+                            let serialized_msg = serde_json::to_vec(&msg).expect("❌ Error serializando mensaje");
+                
+                            if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic, serialized_msg) {
+                                println!("❌ Error publicando mensaje en Gossipsub: {:?}", e);
+                            } else {
+                                println!("✅ Mensaje enviado a la red P2P");
+                            }
                         }
                     }
                 }

@@ -1,9 +1,7 @@
 [package]
-name = "barnett-smart-card-protocol"
+name = "texas-holdem"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0.55"
@@ -36,6 +34,7 @@ arrayref = "0.3.5"
 lazy_static = "1.4.0"
 
 connect = {path = "../connect"}
+barnett-smart-card-protocol = {path = "../barnett-smart-card-protocol"}
 libp2p = { version = "0.54", features = ["identify", "macros", "noise", "ping", "rendezvous", "tcp", "tokio", "yamux", "quic"] }
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -48,7 +47,3 @@ rand_chacha = "0.9.0"
 ark-bls12-377 = "0.3.0"
 byte-unit = "4.0.14"
 
-
-
-[[example]]
-name = "round"

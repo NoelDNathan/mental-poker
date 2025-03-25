@@ -203,6 +203,8 @@ where
         player_public_info: &B,
         proof: &Self::ZKProofKeyOwnership,
     ) -> Result<(), CryptoError> {
+
+
         let mut fs_rng =
             FiatShamirRng::<Blake2s>::from_seed(&to_bytes![KEY_OWN_RNG_SEED, player_public_info]?);
         schnorr_identification::SchnorrIdentification::verify(

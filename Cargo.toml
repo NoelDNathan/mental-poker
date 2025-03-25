@@ -1,8 +1,9 @@
 [workspace]
+resolver = "2"
 
 members = [
     "barnett-smart-card-protocol",
     "zk-reshuffle", 
     "babyjubjub", 
     "proof-essentials"
-, "p2p-chat", "rendezvous", "identify", "connect", "p2p-connection"]
+, "p2p-chat", "rendezvous", "identify", "connect", "p2p-connection", "p2p-connection2", "texas-holdem"]
