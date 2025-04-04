@@ -43,12 +43,13 @@ where
         fs_rng.absorb(&to_bytes![b"shuffle_argument"]?);
 
         // Public data
+        println!("{}", proof_parameters.public_key);
         fs_rng.absorb(&to_bytes![
             proof_parameters.public_key,
             proof_parameters.commit_key
         ]?);
 
-        // statement
+        // // statement
         fs_rng.absorb(
             &to_bytes![
                 statement.input_ciphers,
@@ -58,15 +59,19 @@ where
             ]
             .unwrap(),
         );
-
+        
         // round 1
-        fs_rng.absorb(&to_bytes![self.a_commits]?);
+        fs_rng.absorb(&to_bytes![
+            self.a_commits
+            ]?);
         let x = Scalar::rand(fs_rng);
 
         let challenge_powers = scalar_powers(x, statement.m * statement.n)[1..].to_vec();
-
+        
         // round 2
-        fs_rng.absorb(&to_bytes![self.b_commits]?);
+        fs_rng.absorb(
+            &to_bytes![self.b_commits]?
+        );
         let y = Scalar::rand(fs_rng);
         let z = Scalar::rand(fs_rng);
 
@@ -82,12 +87,12 @@ where
             .zip(self.b_commits.iter())
             .map(|(&a, &b)| a * y + b)
             .collect::<Vec<_>>();
-
+        
         let verifier_side_expected_product = (1..=statement.n * statement.m)
-            .zip(challenge_powers.iter())
-            .map(|(i, x_pow_i)| y * Scalar::from(i as u64) + x_pow_i - z)
-            .product();
-
+        .zip(challenge_powers.iter())
+        .map(|(i, x_pow_i)| y * Scalar::from(i as u64) + x_pow_i - z)
+        .product();
+    
         let product_argument_parameters = product_argument::Parameters::new(
             statement.m,
             statement.n,
@@ -122,7 +127,9 @@ where
             .map(|c| c.to_vec())
             .collect::<Vec<_>>();
 
+
         let product = dot_product(&challenge_powers, statement.input_ciphers).unwrap();
+
 
         let multi_exp_statement =
             multi_exponentiation::Statement::new(&shuffled_chunks, product, &self.b_commits);

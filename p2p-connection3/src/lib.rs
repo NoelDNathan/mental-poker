@@ -2,14 +2,20 @@ use ark_ff::to_bytes;
 use ark_std::rand::thread_rng;
 use ark_std::{rand::Rng, One};
 use babyjubjub::{EdwardsAffine, EdwardsProjective};
+use barnett_smart_card_protocol;
 use barnett_smart_card_protocol::BarnettSmartProtocol;
+use rand::SeedableRng;
+
 use rand;
 use std::collections::HashMap;
 use texas_holdem::{
     encode_cards_ext, generate_list_of_cards, generator, Card, CardProtocol, ClassicPlayingCard,
-    InternalPlayer, ProofKeyOwnership, PublicKey,
+    InternalPlayer, MaskedCard, ProofKeyOwnership, PublicKey, RemaskingProof, Scalar,
+    ZKProofShuffle,
 };
 
+use proof_essentials::utils::permutation::Permutation;
+use proof_essentials::utils::rand::sample_vector;
 use std::{
     collections::hash_map::DefaultHasher,
     env,
@@ -48,6 +54,7 @@ pub enum ProtocolMessage {
     Action(GameAction),
     EncodedCards(Vec<u8>),
     PublicKeyInfo(PublicKeyInfo),
+    ShuffledAndRemaskedCards(Vec<u8>, Vec<u8>),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -67,6 +74,9 @@ pub struct P2PConnection {
     is_dealer: bool,
     num_players: u8,
     player_keys_proof_info: Arc<Mutex<Vec<(PublicKey, ProofKeyOwnership, Vec<u8>)>>>,
+    joint_pk: Arc<Mutex<Option<PublicKey>>>,
+    encoded_cards: Arc<Mutex<HashMap<Card, ClassicPlayingCard>>>,
+    deck: Arc<Mutex<Vec<MaskedCard>>>,
 }
 
 // El comportamiento de red combina Gossipsub y mDNS
@@ -145,10 +155,24 @@ impl P2PConnection {
         // Iniciar el bucle principal en un hilo separado
         let swarm_topic = topic.clone();
 
+        // Leer argumentos de la línea de comandos
+        let args: Vec<String> = env::args().collect();
+        let is_dealer = args.iter().any(|arg| arg == "--dealer"); // Verificar si el argumento dealer es "yes"
+
         let mut player_keys_proof_info = Vec::new();
         let player_keys_proof_info_arc = Arc::new(Mutex::new(player_keys_proof_info));
         let player_keys_clone = Arc::clone(&player_keys_proof_info_arc);
+
         let mut joint_pk = None;
+        let joint_pk_arc = Arc::new(Mutex::new(joint_pk));
+        let joint_pk_clone = Arc::clone(&joint_pk_arc);
+
+        let deck_arc = Arc::new(Mutex::new(Vec::new()));
+        let deck_clone = Arc::clone(&deck_arc);
+
+        let encoded_cards_arc = Arc::new(Mutex::new(HashMap::new()));
+        let encoded_cards_clone = Arc::clone(&encoded_cards_arc);
+
         tokio::spawn(async move {
             loop {
                 select! {
@@ -175,22 +199,6 @@ impl P2PConnection {
                                 swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
                             }
                         },
-                        // SwarmEvent::Behaviour(MyBehaviourEvent::Gossipsub(gossipsub::Event::Message {
-                        //     propagation_source: peer_id,
-                        //     message_id: _id,
-                        //     message,
-                        // })) => {
-                        //     match serde_json::from_slice::<ProtocolMessage>(&message.data) {
-                        //         Ok(protocol_message) => {
-                        //             println!("Received message from {}: {:?}", peer_id, protocol_message);
-                        //             if let Err(e) = from_swarm_tx.try_send((peer_id, protocol_message)) {
-                        //                 println!("Error forwarding message: {:?}", e);
-                        //             }
-                        //         },
-                        //         Err(e) => println!("Error deserializing message: {:?}", e),
-                        //     }
-                        // },
-
                         SwarmEvent::Behaviour(MyBehaviourEvent::Gossipsub(gossipsub::Event::Message {
                             propagation_source: peer_id,
                             message_id: _id,
@@ -198,14 +206,6 @@ impl P2PConnection {
                         })) => {
                             match serde_json::from_slice::<ProtocolMessage>(&message.data) {
                                 Ok(protocol_message) => {
-                                    // println!("Received message from {}: {:?}", peer_id, protocol_message);
-
-                                    // if let ProtocolMessage::PublicKey(key) = protocol_message.clone() {
-                                    //     match deserialize_canonical::<PublicKey>(&key) {
-                                    //         Ok(pk) => println!("Received public key from {}: {:?}", peer_id, pk),
-                                    //         Err(e) => println!("Error deserializing public key: {:?}", e),
-                                    //     }
-                                    // }
 
                                     if let ProtocolMessage::PublicKeyInfo(public_key_info) = protocol_message.clone() {
                                         let mut pk = None;
@@ -233,34 +233,96 @@ impl P2PConnection {
                                             println!("players keys: {:?}", player_keys_clone);
                                             num_players += 1;
                                             println!("Number of players: {:?}", num_players);
-                                            if num_players == 3 {
+                                            if num_players == 2 {
                                                 match CardProtocol::compute_aggregate_key(&parameters, &player_keys_clone.lock().unwrap()) {
-                                                    Ok(aggregate_key) => joint_pk = Some(aggregate_key),
+                                                    Ok(aggregate_key) => {
+                                                        joint_pk = Some(aggregate_key);
+                                                        if is_dealer {
+                                                            let aggregate_key_clone = aggregate_key.clone();
+                                                            // P2PConnection::dealt_cards(&to_swarm_tx, &aggregate_key_clone).await;
+                                                        }
+                                                    },
                                                     Err(e) => println!("Error computing aggregate key: {:?}", e),
                                                 }
                                             }
-
-                                            // verify public key ownership
-                                            // match CardProtocol::verify_key_ownership(&parameters, &pk_val, &name_bytes, &proof_val) {
-                                            //     Ok(_) => println!("Key ownership verified successfully!"),
-                                            //     Err(e) => println!("Key ownership verification failed: {:?}", e),
-                                            // }
-
                                         }
                                     }
 
-                                    if let ProtocolMessage::EncodedCards(encoded_cards) = protocol_message.clone() {
-                                        match deserialize_canonical::<Vec<Card>>(&encoded_cards) {
+                                    if let ProtocolMessage::EncodedCards(encoded_cards_bytes) = protocol_message.clone() {
+                                        // Debería verificar que lo envia el dealer
+                                        match deserialize_canonical::<Vec<Card>>(&encoded_cards_bytes) {
                                             Ok(decoded_cards) => {
-                                                let encode_cards = encode_cards_ext(decoded_cards);
-                                                let list_of_cards = encode_cards.keys().cloned().collect::<Vec<_>>();
+                                                let encode_cards_decoded: HashMap<Card, ClassicPlayingCard> = encode_cards_ext(decoded_cards);
+                                                let guard = joint_pk_clone.lock().unwrap();
+                                                let joint_pk_val = guard.as_ref().unwrap();
+                                                let mut local_rng = rand::thread_rng();
+
+                                                let deck_and_proofs = match encode_cards_decoded
+                                                .keys()
+                                                .map(|card| CardProtocol::mask(&mut local_rng, &parameters, &joint_pk_val, &card, &Scalar::one()))
+                                                .collect::<Result<Vec<_>, _>>() {
+                                                    Ok(results) => results,
+                                                    Err(e) => {
+                                                        println!("Error masking cards: {:?}", e);
+                                                        return;
+                                                    }
+                                                };
+
+                                                let deck = deck_and_proofs
+                                                .iter()
+                                                .map(|x| x.0)
+                                                .collect::<Vec<MaskedCard>>();
+
+                                                for (card, value) in encode_cards_decoded.iter() {
+                                                    encoded_cards_clone.lock().unwrap().insert(card.clone(), value.clone());
+                                                }
+
+                                                for card in deck.iter() {
+                                                    deck_clone.lock().unwrap().push(card.clone());
+                                                }
 
                                                 // Debería verificar que son puntos validos de la curva!!!
-                                               
+
                                             },
                                             Err(e) => println!("Error deserializing encoded cards: {:?}", e),
                                         }
                                     }
+
+                                    if let ProtocolMessage::ShuffledAndRemaskedCards(shuffled_cards, proof_bytes) = protocol_message.clone() {
+
+                                        let shuffled_cards_decoded = match deserialize_canonical::<Vec<MaskedCard>>(&shuffled_cards) {
+                                            Ok(decoded) => decoded,
+                                            Err(e) => {
+                                                println!("Error deserializing shuffled cards: {:?}", e);
+                                                return;
+                                            }
+                                        };
+
+                                        let proof_decoded = match deserialize_canonical::<ZKProofShuffle>(&proof_bytes) {
+                                            Ok(decoded) => decoded,
+                                            Err(e) => {
+                                                println!("Error deserializing proof: {:?}", e);
+                                                return;
+                                            }
+                                        };
+
+                                        let m = 2;
+                                        let n = 26;
+                                        let num_of_cards = m * n;
+                                        let seed = [0; 32];
+                                        let rng = &mut rand::rngs::StdRng::from_seed(seed);
+                                        let pp = CardProtocol::setup(rng, generator(), m, n).unwrap();
+
+                                        let guard = joint_pk_clone.lock().unwrap();
+                                        let joint_pk_val = guard.as_ref().unwrap();
+
+                                        match CardProtocol::verify_shuffle(&pp, &joint_pk_val, &deck_clone.lock().unwrap(), &shuffled_cards_decoded, &proof_decoded) {
+                                            Ok(_) => println!("Shuffle verified successfully!"),
+                                            Err(e) => println!("Shuffle verification failed: {:?}", e),
+                                        }
+                                    }
+
+
                                     if let Err(e) = from_swarm_tx.try_send((peer_id, protocol_message)) {
                                         println!("Error forwarding message: {:?}", e);
                                     }
@@ -280,10 +342,6 @@ impl P2PConnection {
             }
         });
 
-        // Leer argumentos de la línea de comandos
-        let args: Vec<String> = env::args().collect();
-        let is_dealer = args.iter().any(|arg| arg == "--dealer"); // Verificar si el argumento dealer es "yes"
-
         Ok(Self {
             sender: to_swarm_tx,
             receiver: from_swarm_rx,
@@ -291,7 +349,75 @@ impl P2PConnection {
             is_dealer,
             num_players,
             player_keys_proof_info: Arc::clone(&player_keys_proof_info_arc),
+            joint_pk: Arc::clone(&joint_pk_arc),
+            encoded_cards: Arc::clone(&encoded_cards_arc),
+            deck: Arc::clone(&deck_arc),
         })
+    }
+
+    pub async fn dealt_cards(
+        sender: &mpsc::Sender<ProtocolMessage>,
+        joint_pk: &PublicKey,
+    ) -> Result<(), Box<dyn Error>> {
+        println!("El jugador es el dealer.");
+        let joint_pk_val = joint_pk.clone();
+        let m = 2;
+        let n = 26;
+        let num_of_cards = m * n;
+        let seed = [0; 32];
+        let rng = &mut rand::rngs::StdRng::from_seed(seed);
+        let parameters = CardProtocol::setup(rng, generator(), m, n)?;
+
+        let list_of_cards = generate_list_of_cards(rng, num_of_cards);
+        let encoded_cards = encode_cards_ext(list_of_cards.clone());
+
+        for (i, (card, value)) in encoded_cards.iter().enumerate().take(52) {
+            println!("{:?} -> {:?}", card.0.to_string(), value);
+        }
+
+        let encoded_cards_bytes = serialize_canonical(&list_of_cards)?;
+        P2PConnection::send_encoded_cards(&sender, &encoded_cards_bytes).await?;
+
+        let deck_and_proofs: Vec<(MaskedCard, RemaskingProof)> = encoded_cards
+            .keys()
+            .map(|card| CardProtocol::mask(rng, &parameters, &joint_pk_val, &card, &Scalar::one()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let deck = deck_and_proofs
+            .iter()
+            .map(|x| x.0)
+            .collect::<Vec<MaskedCard>>();
+
+        let permutation = Permutation::new(rng, m * n);
+        let masking_factors: Vec<Scalar> = sample_vector(rng, m * n);
+
+        // (a_shuffled_deck, a_shuffle_proof): (Vec<MaskedCard>, Vec<RemaskingProof>) =
+        match CardProtocol::shuffle_and_remask(
+            rng,
+            &parameters,
+            &joint_pk_val,
+            &deck,
+            &masking_factors,
+            &permutation,
+        ) {
+            Ok((a, b)) => {
+                let shuffled_deck: Vec<MaskedCard> = a;
+                let shuffle_proof: ZKProofShuffle = b;
+                let remasked_bytes = serialize_canonical(&shuffled_deck)?;
+                let proof_bytes = serialize_canonical(&shuffle_proof)?;
+                P2PConnection::send_message(
+                    &sender,
+                    ProtocolMessage::ShuffledAndRemaskedCards(remasked_bytes, proof_bytes),
+                )
+                .await?;
+            }
+            Err(e) => {
+                println!("Error shuffling and remasking: {:?}", e);
+                return Err(e.into());
+            }
+        };
+
+        Ok(())
     }
 
     pub async fn start_game(&mut self) -> Result<(), Box<dyn Error>> {
@@ -312,29 +438,26 @@ impl P2PConnection {
         let player = InternalPlayer::new(rng, &parameters, &to_bytes![name.as_bytes()].unwrap())?;
 
         // Puedes usar is_dealer para decidir el comportamiento del jugador
-        if self.is_dealer {
-            let list_of_cards = generate_list_of_cards(rng, num_of_cards);
-            let encoded_cards = encode_cards_ext(list_of_cards.clone());
+        // if self.is_dealer {
+        //     let list_of_cards = generate_list_of_cards(rng, num_of_cards);
+        //     let encoded_cards = encode_cards_ext(list_of_cards.clone());
 
-            for (i, (card, value)) in encoded_cards.iter().enumerate().take(52) {
-                println!("{:?} -> {:?}", card.0.to_string(), value);
-            }
-            // let list_of_cards = encoded_cards.keys().cloned().collect::<Vec<_>>();
+        //     for (i, (card, value)) in encoded_cards.iter().enumerate().take(52) {
+        //         println!("{:?} -> {:?}", card.0.to_string(), value);
+        //     }
+        //     // let list_of_cards = encoded_cards.keys().cloned().collect::<Vec<_>>();
 
-            let encoded_cards_bytes = serialize_canonical(&list_of_cards)?;
-            self.send_encoded_cards(&encoded_cards_bytes).await?;
-            println!("El jugador es el dealer.");
-        } else {
-            println!("El jugador no es el dealer.");
-        }
+        //     let encoded_cards_bytes = serialize_canonical(&list_of_cards)?;
+        //     P2PConnection::send_encoded_cards(&self.sender, &encoded_cards_bytes).await?;
+        //     println!("El jugador es el dealer.");
+        // } else {
+        //     println!("El jugador no es el dealer.");
+        // }
 
         let pk_bytes = serialize_canonical(&player.pk)?;
 
         let pk_proof: &ProofKeyOwnership = &player.proof_key;
         let pk_proof_bytes = serialize_canonical::<ProofKeyOwnership>(pk_proof)?;
-
-        let test_pk_proof_deserialized =
-            deserialize_canonical::<ProofKeyOwnership>(&pk_proof_bytes)?;
 
         self.num_players += 1;
         self.player_keys_proof_info.lock().unwrap().push((
@@ -359,20 +482,37 @@ impl P2PConnection {
         self.peer_id
     }
 
+    pub async fn send_message(
+        sender: &mpsc::Sender<ProtocolMessage>,
+        message: ProtocolMessage,
+    ) -> Result<(), Box<dyn Error>> {
+        sender.clone().try_send(message)?;
+        Ok(())
+    }
+
+    pub async fn send_encoded_cards(
+        sender: &mpsc::Sender<ProtocolMessage>,
+        encoded_cards: &[u8],
+    ) -> Result<(), Box<dyn Error>> {
+        P2PConnection::send_message(
+            sender,
+            ProtocolMessage::EncodedCards(encoded_cards.to_vec()),
+        )
+        .await
+    }
+
     // Enviar un mensaje del protocolo
-    pub async fn send_message(&self, message: ProtocolMessage) -> Result<(), Box<dyn Error>> {
+    pub async fn send_message_internal(
+        &self,
+        message: ProtocolMessage,
+    ) -> Result<(), Box<dyn Error>> {
         self.sender.clone().try_send(message)?;
         Ok(())
     }
 
-    pub async fn send_encoded_cards(&self, encoded_cards: &[u8]) -> Result<(), Box<dyn Error>> {
-        self.send_message(ProtocolMessage::EncodedCards(encoded_cards.to_vec()))
-            .await
-    }
-
     // Enviar una clave pública
     pub async fn send_public_key(&self, public_key: &[u8]) -> Result<(), Box<dyn Error>> {
-        self.send_message(ProtocolMessage::PublicKey(public_key.to_vec()))
+        self.send_message_internal(ProtocolMessage::PublicKey(public_key.to_vec()))
             .await
     }
 
@@ -380,31 +520,32 @@ impl P2PConnection {
         &self,
         public_key_info: PublicKeyInfo,
     ) -> Result<(), Box<dyn Error>> {
-        self.send_message(ProtocolMessage::PublicKeyInfo(public_key_info))
+        self.send_message_internal(ProtocolMessage::PublicKeyInfo(public_key_info))
             .await
     }
 
     // Enviar una prueba
     pub async fn send_proof(&self, proof: &[u8]) -> Result<(), Box<dyn Error>> {
-        self.send_message(ProtocolMessage::Proof(proof.to_vec()))
+        self.send_message_internal(ProtocolMessage::Proof(proof.to_vec()))
             .await
     }
 
     // Enviar un token de revelación
     pub async fn send_reveal_token(&self, token: &[u8]) -> Result<(), Box<dyn Error>> {
-        self.send_message(ProtocolMessage::RevealToken(token.to_vec()))
+        self.send_message_internal(ProtocolMessage::RevealToken(token.to_vec()))
             .await
     }
 
     // Enviar una carta
     pub async fn send_card(&self, card: &[u8]) -> Result<(), Box<dyn Error>> {
-        self.send_message(ProtocolMessage::Card(card.to_vec()))
+        self.send_message_internal(ProtocolMessage::Card(card.to_vec()))
             .await
     }
 
     // Enviar una acción del juego
     pub async fn send_action(&self, action: GameAction) -> Result<(), Box<dyn Error>> {
-        self.send_message(ProtocolMessage::Action(action)).await
+        self.send_message_internal(ProtocolMessage::Action(action))
+            .await
     }
 
     // Recibir un mensaje (bloquea hasta recibir uno)

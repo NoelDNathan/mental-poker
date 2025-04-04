@@ -60,7 +60,11 @@ where
             .unwrap(),
         );
 
-        fs_rng.absorb(&to_bytes![m as u32, n as u32, num_of_diagonals as u32]?);
+        fs_rng.absorb(&to_bytes![
+            m as u32, 
+            n as u32, 
+            num_of_diagonals as u32
+            ]?);
 
         fs_rng.absorb(&to_bytes![
             self.a_0_commit,
@@ -73,6 +77,7 @@ where
         // Precompute all powers of the challenge from 0 to number_of_diagonals
         let challenge_powers = scalar_powers(challenge, num_of_diagonals);
 
+
         // take vector x: x, x^2, x^3, ..., x^m
         let x_array = challenge_powers[1..m + 1].to_vec();
 
@@ -83,11 +88,13 @@ where
             Scalar::zero(),
         )?;
 
+
         if left != right {
             return Err(CryptoError::ProofVerificationError(String::from(
                 "Multi Exponentiation",
             )));
         }
+
 
         if self.vector_e_k[m] != statement.product {
             return Err(CryptoError::ProofVerificationError(String::from(
@@ -120,6 +127,7 @@ where
                 "Multi Exponentiation",
             )));
         }
+
 
         let sum_e_k = dot_product(&challenge_powers, &self.vector_e_k)?;
 

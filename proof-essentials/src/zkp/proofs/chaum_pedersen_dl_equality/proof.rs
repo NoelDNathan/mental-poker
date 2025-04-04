@@ -34,7 +34,7 @@ impl<C: ProjectiveCurve> Proof<C> {
             statement.0,
             statement.1
         ]?);
-        fs_rng.absorb(&to_bytes![&self.a, &self.b]?);
+        fs_rng.absorb(&to_bytes![&self.a.to_string().as_bytes(), &self.b.to_string().as_bytes()]?);
 
         let c = C::ScalarField::rand(fs_rng);
 

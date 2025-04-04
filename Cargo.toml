@@ -6,4 +6,4 @@ members = [
     "zk-reshuffle", 
     "babyjubjub", 
     "proof-essentials"
-, "p2p-chat", "rendezvous", "identify", "connect", "p2p-connection", "p2p-connection2", "texas-holdem"]
+, "p2p-chat", "rendezvous", "identify", "connect", "p2p-connection", "p2p-connection2", "texas-holdem", "p2p-connection3", "p2p-connection4"]

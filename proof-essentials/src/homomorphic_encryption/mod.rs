@@ -4,14 +4,15 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::Rng;
 use std::iter::Sum;
 use std::ops;
-
+use std::fmt::Debug;
+use std::fmt::Display;
 pub mod el_gamal;
 
 /// Trait defining the types and functions needed for an additively homomorphic encryption scheme.
 /// The scheme is defined with respect to a finite field `F` for which scalar multiplication is preserved.
 pub trait HomomorphicEncryptionScheme<Scalar: Field> {
     type Parameters: CanonicalSerialize + CanonicalDeserialize;
-    type PublicKey: CanonicalSerialize + CanonicalDeserialize + ToBytes;
+    type PublicKey: CanonicalSerialize + CanonicalDeserialize + ToBytes + Display;
     type SecretKey: CanonicalSerialize + CanonicalDeserialize;
     type Generator: Copy
         + ops::Add
@@ -38,7 +39,8 @@ pub trait HomomorphicEncryptionScheme<Scalar: Field> {
         + CanonicalDeserialize
         + Sum
         + Zero
-        + ToBytes;
+        + ToBytes
+        + Debug;
 
     /// Generate the scheme's parameters.
     fn setup<R: Rng>(rng: &mut R) -> Result<Self::Parameters, CryptoError>;

@@ -22,15 +22,13 @@ use std::str::FromStr;
 use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, Write, Read, SerializationError};
 
 
-use proof_essentials::homomorphic_encryption::HomomorphicEncryptionScheme;
-use proof_essentials::vector_commitment::HomomorphicCommitmentScheme;
-use proof_essentials::zkp::arguments::shuffle::proof::Proof as ZKProofShuffle;
+
 type Curve = EdwardsProjective;
 pub type Scalar = Fr;
 
 // Instantiate concrete type for our card protocol
 pub type CardProtocol<'a> = discrete_log_cards::DLCards<'a, Curve>;
-type CardParameters = discrete_log_cards::Parameters<Curve>;
+pub type CardParameters = discrete_log_cards::Parameters<Curve>;
 pub type PublicKey = discrete_log_cards::PublicKey<Curve>;
 type SecretKey = discrete_log_cards::PlayerSecretKey<Curve>;
 
@@ -41,12 +39,7 @@ pub type RevealToken = discrete_log_cards::RevealToken<Curve>;
 pub type ProofKeyOwnership = schnorr_identification::proof::Proof<Curve>;
 pub type RemaskingProof = chaum_pedersen_dl_equality::proof::Proof<Curve>;
 pub type RevealProof = chaum_pedersen_dl_equality::proof::Proof<Curve>;
-
-
-
-
-
-
+pub type ZKProofShuffle = proof_essentials::zkp::arguments::shuffle::proof::Proof<ark_ff::Fp256<babyjubjub::FrParameters>, proof_essentials::homomorphic_encryption::el_gamal::ElGamal<ark_ec::twisted_edwards_extended::GroupProjective<babyjubjub::EdwardsParameters>>, proof_essentials::vector_commitment::pedersen::PedersenCommitment<ark_ec::twisted_edwards_extended::GroupProjective<babyjubjub::EdwardsParameters>>>;
 
 
 #[derive(Error, Debug, PartialEq)]
@@ -185,7 +178,8 @@ impl InternalPlayer {
         card_mappings: &HashMap<Card, ClassicPlayingCard>,
         card: &MaskedCard,
     ) -> Result<(), anyhow::Error> {
-        let i = self.cards.iter().position(|&x| x == *card);
+
+        let i: Option<usize> = self.cards.iter().position(|&x| x == *card);
 
         let i = i.ok_or(GameErrors::CardNotFound)?;
 
@@ -198,10 +192,20 @@ impl InternalPlayer {
         let own_reveal_token = self.compute_reveal_token(rng, parameters, card)?;
         reveal_tokens.push(own_reveal_token);
 
+        println!("Reveal tokens 1: {:?}", reveal_tokens[0].0.0.to_string());
+        println!("Reveal tokens 2: {:?}", reveal_tokens[1].0.0.to_string());
+
         let unmasked_card = CardProtocol::unmask(&parameters, reveal_tokens, card)?;
+        // println!("Unmasked card: {:?}", unmasked_card.0.to_string());
+
+        // for (card, value) in card_mappings.iter() {
+        //     println!("{:?} -> {:?}", card.0.to_string(), value);
+        // }
+
+        println!("Unmasked card: {:?}", unmasked_card.0.to_string());
         let opened_card = card_mappings.get(&unmasked_card);
         let opened_card = opened_card.ok_or(GameErrors::InvalidCard)?;
-
+        
         self.opened_cards[i] = Some(*opened_card);
         Ok(())
     }
@@ -214,7 +218,6 @@ impl InternalPlayer {
     ) -> anyhow::Result<(RevealToken, RevealProof, PublicKey)> {
         let (reveal_token, reveal_proof) =
             CardProtocol::compute_reveal_token(rng, &pp, &self.sk, &self.pk, card)?;
-
         Ok((reveal_token, reveal_proof, self.pk))
     }
 }
@@ -226,6 +229,7 @@ pub fn open_card(
     card: &MaskedCard,
 ) -> Result<ClassicPlayingCard, anyhow::Error> {
     let unmasked_card = CardProtocol::unmask(&parameters, reveal_tokens, card)?;
+    println!("Unmasked card: {:?}", unmasked_card.0.to_string());
     let opened_card = card_mappings.get(&unmasked_card);
     let opened_card = opened_card.ok_or(GameErrors::InvalidCard)?;
 

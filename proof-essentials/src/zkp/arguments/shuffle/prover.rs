@@ -68,6 +68,7 @@ where
             .collect::<Result<Vec<_>, CryptoError>>()?;
 
         // Public data
+        println!("{}", self.parameters.public_key);
         fs_rng.absorb(&to_bytes![
             self.parameters.public_key,
             self.parameters.commit_key

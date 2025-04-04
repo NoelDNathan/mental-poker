@@ -1,6 +1,6 @@
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::{rand::thread_rng, UniformRand};
-use p2p_connection2::{GameAction, P2PConnection, ProtocolMessage};
+use p2p_connection3::{GameAction, P2PConnection, ProtocolMessage};
 use std::{collections::HashMap, env, error::Error, time::Duration};
 use texas_holdem::{encode_cards, generator, Card, CardProtocol, ClassicPlayingCard};
 use tokio::time::sleep;

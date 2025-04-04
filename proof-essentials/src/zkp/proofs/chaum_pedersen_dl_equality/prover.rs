@@ -44,7 +44,7 @@ where
         let a = parameters.g.mul(omega.into_repr());
         let b = parameters.h.mul(omega.into_repr());
 
-        fs_rng.absorb(&to_bytes![a, b]?);
+        fs_rng.absorb(&to_bytes![a.to_string().as_bytes(), b.to_string().as_bytes()]?);
 
         let c = C::ScalarField::rand(fs_rng);
 

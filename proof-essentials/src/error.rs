@@ -30,6 +30,9 @@ pub enum CryptoError {
     #[error("InvalidShuffleStatement")]
     InvalidShuffleStatement,
 
+    #[error("SerializationError: {0}")]
+    SerializationError(String),
+
     #[error("IoError: {0}")]
     IoError(String),
 }
