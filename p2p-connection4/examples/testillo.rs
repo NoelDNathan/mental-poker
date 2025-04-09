@@ -15,9 +15,9 @@ use std::{
     collections::hash_map::DefaultHasher,
     error::Error,
     hash::{Hash, Hasher},
-    time::Duration,
+    time::{Duration, Instant},
 };
-use tokio::{io, io::AsyncBufReadExt, select};
+use tokio::{io, io::AsyncBufReadExt, select, time::interval};
 use tracing_subscriber::EnvFilter;
 
 // We create a custom network behaviour that combines Gossipsub and Mdns.
@@ -53,13 +53,22 @@ pub struct PublicKeyInfoEncoded {
 pub enum ProtocolMessage {
     Text(Vec<u8>),
     Proof(Vec<u8>),
-    RevealToken(Vec<u8>, Vec<u8>),
+    RevealToken(u8, Vec<u8>, Vec<u8>),
     RevealTokenCommunityCards(Vec<Vec<u8>>, Vec<u8>),
     Card(Vec<u8>),
     EncodedCards(Vec<u8>),
     PublicKeyInfo(PublicKeyInfoEncoded),
     ShuffledAndRemaskedCards(Vec<u8>, Vec<u8>),
     RevealAllCards(Vec<Vec<u8>>),
+    Ping(Vec<u8>),
+    Pong(Vec<u8>),
+}
+
+
+pub struct PlayerInfo{
+    name: String,
+    pk: PublicKey,
+    proof_key: ProofKeyOwnership,
 }
 
 #[tokio::main]
@@ -120,7 +129,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     println!("Enter messages via STDIN and they will be sent to connected peers using Gossipsub");
 
     // Añade un HashMap para rastrear los peers y sus nombres
-    let mut connected_peers: HashMap<libp2p::PeerId, String> = HashMap::new();
 
     let m = 2;
     let n = 26;
@@ -150,7 +158,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut deck: Option<Vec<MaskedCard>> = None;
 
     let mut first_message = true;
-    let mut num_players_expected = 2;
+    let mut num_players_expected = 3;
     let mut current_dealer = 0;
     let mut players_connected = 1;
     let mut current_shuffler = 0;
@@ -160,9 +168,58 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut community_cards_tokens: Vec<Vec<(RevealToken, RevealProof, PublicKey)>> =
         vec![Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+
+    // Estructura para rastrear la última vez que se vio actividad de cada peer
+    let mut peer_last_seen: HashMap<libp2p::PeerId, Instant> = HashMap::new();
+
+    // Intervalo para verificar peers inactivos (cada 10 segundos)
+    let mut heartbeat_interval = interval(Duration::from_secs(1));
+
+    // Tiempo máximo sin actividad antes de considerar a un peer desconectado (30 segundos)
+    let timeout_duration = Duration::from_secs(10);
+
+    let mut connected_peers: HashMap<libp2p::PeerId, PlayerInfo> = HashMap::new();
+
+
     // Kick it off
     loop {
         select! {
+            _ = heartbeat_interval.tick() => {
+                // Aquí puedes agregar la lógica para verificar la actividad de los peers
+                let now = Instant::now();
+                let mut disconnected_peers = Vec::new();
+
+                if connected_peers.len() > 0{
+                    if let Err(e) = send_protocol_message(&mut swarm, &topic, &ProtocolMessage::Ping(vec![])) {
+                        println!("Error sending ping: {:?}", e);
+                    }
+                }
+
+                for (peer_id, last_seen) in &peer_last_seen {
+                    if now.duration_since(*last_seen) > timeout_duration {
+                        disconnected_peers.push(*peer_id);
+                        println!("Peer desconectado: {}", peer_id);
+                    }
+                }
+
+                // println!("Connected peers: {:?}", connected_peers);
+                // Procesar peers desconectados
+                for peer_id in disconnected_peers {
+                    if let Some(player_info) = connected_peers.remove(&peer_id) {
+                        println!("¡Jugador desconectado por inactividad!: {} ({})", player_info.name, peer_id);
+                        players_connected -= 1;
+                        peer_last_seen.remove(&peer_id);
+
+                        if players_connected > 1{
+
+                            println!("Starting reshuffle");
+
+                            
+
+                        }
+                    }
+                }
+            }
             Ok(Some(line)) = stdin.next_line() => {
                 println!("Line: {:?}", line);
                 if first_message{
@@ -192,7 +249,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                             let message = ProtocolMessage::RevealTokenCommunityCards(vec![reveal_token_flop1_bytes, reveal_token_flop2_bytes, reveal_token_flop3_bytes], vec![0, 1, 2]);
 
-                            send_protocol_message(&mut swarm, &topic, &message);
+                            if let Err(e) = send_protocol_message(&mut swarm, &topic, &message) {
+                                println!("Error sending reveal token community cards: {:?}", e);
+                            }
                         }
                         else{
                                println!("No se puede revelar la carta: deck aún no está inicializada");
@@ -206,7 +265,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                             let message = ProtocolMessage::RevealTokenCommunityCards(vec![reveal_token_turn_bytes], vec![3]);
 
-                            send_protocol_message(&mut swarm, &topic, &message);
+                            if let Err(e) = send_protocol_message(&mut swarm, &topic, &message) {
+                                println!("Error sending reveal token community cards: {:?}", e);
+                            }
 
                         }
                         else{
@@ -222,7 +283,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                             let message = ProtocolMessage::RevealTokenCommunityCards(vec![reveal_token_river_bytes], vec![4]);
 
-                            send_protocol_message(&mut swarm, &topic, &message);
+                            if let Err(e) = send_protocol_message(&mut swarm, &topic, &message) {
+                                println!("Error sending reveal token community cards: {:?}", e);
+                            }
                         }
                         else{
                             println!("No se puede revelar la carta: deck aún no está inicializada");
@@ -237,7 +300,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 reveal_all_cards_bytes.push(reveal_token_bytes);
                             }
                             let message = ProtocolMessage::RevealAllCards(reveal_all_cards_bytes);
-                            send_protocol_message(&mut swarm, &topic, &message);
+                            if let Err(e) = send_protocol_message(&mut swarm, &topic, &message) {
+                                println!("Error sending reveal all cards: {:?}", e);
+                            }
                         }
                         else{
                             println!("No se puede revelar la carta: deck aún no está inicializada");
@@ -265,13 +330,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 },
                 SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                     println!("Conexión establecida con peer: {peer_id}");
+                    peer_last_seen.insert(peer_id, Instant::now());
                     // Aquí solo registramos la conexión, el nombre se asociará cuando recibamos su PublicKeyInfo
                 },
 
                 SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                    if let Some(name) = connected_peers.remove(&peer_id) {
-                        println!("¡Jugador desconectado!: {} ({})", name, peer_id);
+                    if let Some(player_info) = connected_peers.remove(&peer_id) {
+                        println!("¡Jugador desconectado!: {} ({})", player_info.name, peer_id);
                         players_connected -= 1;
+                        peer_last_seen.remove(&peer_id);
                         // Aquí puedes añadir lógica adicional para manejar la desconexión
                     } else {
                         println!("Conexión cerrada con peer desconocido: {peer_id}");
@@ -282,6 +349,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     message_id: id,
                     message,
                 })) => {
+                    peer_last_seen.insert(peer_id, Instant::now());
                     match serde_json::from_slice::<ProtocolMessage>(&message.data) {
                         Ok(protocol_message) => {
                             match protocol_message {
@@ -308,14 +376,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                                     name = String::from_utf8(public_key_info.name.clone()).unwrap_or_default();
 
-                                    // Asocia el nombre del jugador con su peer_id
-                                    connected_peers.insert(peer_id, name.clone());
-
+                                    
                                     if let (Some(pk_val), Some(proof_val)) = (pk, proof_key) {
                                         players_connected += 1;
                                         let name_bytes = to_bytes![name.as_bytes()].unwrap();
                                         pk_proof_info_array.push((pk_val, proof_val, name_bytes));
+
+
+
                                         println!("Number of players: {:?}", players_connected);
+
+                                        match CardProtocol::verify_key_ownership(&pp, &pk_val, &player.name.clone(), &proof_val){
+                                            Ok(_) => {
+                                                // Asocia el nombre del jugador con su peer_id
+                                                connected_peers.insert(peer_id, PlayerInfo{name: name.clone(), pk: pk_val.clone(), proof_key: proof_val.clone()});
+                                            },
+                                            Err(e) => println!("Error verifying proof key ownership: {:?}", e),
+                                        }
 
                                         if players_connected == num_players_expected {
 
@@ -344,14 +421,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     let list_of_cards = deserialize_canonical::<Vec<Card>>(&card_mapping_bytes)?;
 
                                     card_mapping = Some(encode_cards_ext(list_of_cards.clone()));
-                                    for (i, (card, value)) in card_mapping.as_ref().unwrap().iter().enumerate().take(52) {
-                                        println!("{:?} -> {:?}", card.0.to_string(), value);
-                                    }
-                                    // if let Some(mapping) = &card_mapping {
-                                    //     for (i, (card, value)) in mapping.iter().enumerate().take(52) {
-                                    //         println!("{:?} -> {:?}", card.0.to_string(), value);
-                                    //     }
+                                    // for (i, (card, value)) in card_mapping.as_ref().unwrap().iter().enumerate().take(52) {
+                                    //     println!("{:?} -> {:?}", card.0.to_string(), value);
                                     // }
+
 
 
                                     if let Some(pk) = &joint_pk {
@@ -381,7 +454,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                                 current_shuffler += 1;
 
                                                 if current_shuffler == player_id.parse::<usize>().unwrap(){
-                                                    println!("send shuffled and remasked cards");
                                                     let shuffle_deck = shuffle_remask_and_send(&mut swarm, &topic, &pp, rng, &joint_pk.as_ref().unwrap(), &remasked_cards, m, n ).unwrap();
                                                     deck = Some(shuffle_deck);
                                                 }
@@ -400,11 +472,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                                                                 let reveal_token1: (RevealToken, RevealProof, PublicKey) = player.compute_reveal_token(rng, &pp, &deck[i as usize * 2 + 5])?;
                                                                 let reveal_token2: (RevealToken, RevealProof, PublicKey) = player.compute_reveal_token(rng, &pp, &deck[i as usize * 2 + 1 + 5])?;
-                                                                println!("Reveal token 1 patata: {:?}", reveal_token1.0.0.to_string());
-                                                                println!("Reveal token 2 patata: {:?}", reveal_token2.0.0.to_string());
+                                                                println!("Reveal token 1: {:?}", reveal_token1.0.0.to_string());
+                                                                println!("Reveal token 2: {:?}", reveal_token2.0.0.to_string());
                                                                 let reveal_token1_bytes = serialize_canonical(&reveal_token1)?;
                                                                 let reveal_token2_bytes = serialize_canonical(&reveal_token2)?;
-                                                                let message = ProtocolMessage::RevealToken(reveal_token1_bytes, reveal_token2_bytes);
+                                                                let message = ProtocolMessage::RevealToken(i as u8, reveal_token1_bytes, reveal_token2_bytes);
                                                                 if let Err(e) = send_protocol_message(&mut swarm, &topic, &message) {
                                                                     println!("Error sending reveal token: {:?}", e);
                                                             }
@@ -424,7 +496,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     }
 
                                 }
-                                ProtocolMessage::RevealToken(reveal_token1_bytes, reveal_token2_bytes) => {
+                                ProtocolMessage::RevealToken(id, reveal_token1_bytes, reveal_token2_bytes) => {
+                                    if id != player_id.parse::<u8>().unwrap(){
+                                        continue;
+                                    }
                                     println!("Got reveal token");
                                     let reveal_token1 = deserialize_canonical::<(RevealToken, RevealProof, PublicKey)>(&reveal_token1_bytes)?;
                                     let reveal_token2 = deserialize_canonical::<(RevealToken, RevealProof, PublicKey)>(&reveal_token2_bytes)?;
@@ -475,8 +550,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     for i in 0..reveal_token_bytes.len() {
                                         let token_bytes = &reveal_token_bytes[i];
                                         let index = index_bytes[i] as usize;
-                                        println!("Token bytes: {:?}", token_bytes);
-                                        println!("Index: {:?}", index);
 
                                         let token = deserialize_canonical::<(RevealToken, RevealProof, PublicKey)>(&token_bytes)?;
                                         community_cards_tokens[index].push(token);
@@ -529,7 +602,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                         println!("No se puede revelar la carta: deck aún no está inicializada");
                                     }
                                 }
-
+                                ProtocolMessage::Ping(ping_data) => {
+                                    // Responder con un pong
+                                    if let Err(e) = send_protocol_message(&mut swarm, &topic, &ProtocolMessage::Pong(ping_data.clone())) {
+                                        println!("Error enviando pong: {:?}", e);
+                                    }
+                                },
+                                ProtocolMessage::Pong(_) => {
+                                    // No necesitamos hacer nada especial aquí, ya actualizamos peer_last_seen arriba
+                                },
                                 _ => {}
                             }
                         }
@@ -544,6 +625,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
                 _ => {}
             }
+
         }
     }
 }
@@ -602,6 +684,7 @@ fn shuffle_remask_and_send(
     m: usize,
     n: usize,
 ) -> Result<Vec<MaskedCard>, Box<dyn Error>> {
+    println!("send shuffled and remasked cards");
     let permutation = Permutation::new(rng, m * n);
     let masking_factors: Vec<Scalar> = sample_vector(rng, m * n);
 
