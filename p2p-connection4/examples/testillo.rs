@@ -602,9 +602,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                                         match find_player_by_id(&mut connected_peers, id) {
                                             Some((peer_id_ref, player_info)) => {
-                                                    
+                                                    println!("Received reveal token from player {}", id);
+                                                    println!("Received reveal token from player {}", id);
                                                     player_info.reveal_tokens[0].push(reveal_token1);
                                                     player_info.reveal_tokens[1].push(reveal_token2);
+                                                    println!("Atento: {:?}", player_info.reveal_tokens[0].len());
+                                                    println!("Atento: {:?}", player_info.reveal_tokens[1].len());
                                                     if player_info.reveal_tokens[0].len() == num_players_expected -1{
 
                                                         println!("Todos los tokens recibidos para el jugador {}", player_info.id);
@@ -636,15 +639,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     let reveal_token1 = deserialize_canonical::<(RevealToken, RevealProof, PublicKey)>(&reveal_token1_bytes)?;
                                     let reveal_token2 = deserialize_canonical::<(RevealToken, RevealProof, PublicKey)>(&reveal_token2_bytes)?;
 
+                                    println!("Received reveal token 1 length: {:?}", received_reveal_tokens1.len());
                                     received_reveal_tokens1.push(reveal_token1);
                                     received_reveal_tokens2.push(reveal_token2);
 
                                     num_received_reveal_tokens += 1;
+                                    println!("Num received reveal tokens: {:?}", num_received_reveal_tokens);
+                                    println!("Num players expected: {:?}", num_players_expected);
 
                                     if num_received_reveal_tokens == num_players_expected - 1 {
                                         println!("All tokens received, revealing cards");
                                         let index1 = player_id.parse::<usize>().unwrap() * 2 + 5;
                                         let index2 = player_id.parse::<usize>().unwrap() * 2 + 1 + 5;
+                                        println!("index1: {:?}", index1);
+                                        println!("index2: {:?}", index2);
                                         if let Some(card_mapping) = &card_mapping {
                                             if let Some(deck) = &deck {
                                                 // println!("Player cards: {:?}", player.cards);
@@ -733,6 +741,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                                 ProtocolMessage::ZKProofRemoveAndRemaskChunk(i, length, chunk) => {
                                     public_reshuffle_bytes.push((i, chunk.clone()));
+                                    println!("i: {:?}", i);
+                                    println!("length: {:?}", length);
                                     if i == length - 1{
                                         is_all_public_reshuffle_bytes_received = true;
                                         if proof_reshuffle_bytes.len() > 0 {
