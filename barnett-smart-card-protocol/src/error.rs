@@ -12,6 +12,9 @@ pub enum CardProtocolError {
 
     #[error("Other: {0}")]
     Other(String),
+
+    #[error("Card mapping not found")]
+    CardMappingError(),
 }
 
 impl From<std::io::Error> for CardProtocolError {

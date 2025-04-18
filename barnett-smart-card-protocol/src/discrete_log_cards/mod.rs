@@ -203,8 +203,6 @@ where
         player_public_info: &B,
         proof: &Self::ZKProofKeyOwnership,
     ) -> Result<(), CryptoError> {
-
-
         let mut fs_rng =
             FiatShamirRng::<Blake2s>::from_seed(&to_bytes![KEY_OWN_RNG_SEED, player_public_info]?);
         schnorr_identification::SchnorrIdentification::verify(
@@ -441,6 +439,7 @@ where
 
         let mut aggregate_token = zero;
 
+        println!("Decryption key length: {:?}", decryption_key.len());
         for (token, proof, pk) in decryption_key {
             Self::verify_reveal(pp, pk, token, masked_card, proof)?;
 
@@ -449,7 +448,7 @@ where
 
         let neg_one = -C::ScalarField::one();
         let negative_token = aggregate_token.0.mul(neg_one).into_affine();
-        let partial_decrypted = el_gamal::Ciphertext(masked_card.0, masked_card.1 + negative_token);
+        let partial_decrypted: el_gamal::Ciphertext<C> = el_gamal::Ciphertext(masked_card.0, masked_card.1 + negative_token);
 
         Ok(partial_decrypted)
     }
@@ -508,8 +507,6 @@ where
             &pp.generator,
         );
 
-
-
         let shuffle_statement = shuffle::Statement::new(original_deck, shuffled_deck, pp.m, pp.n);
 
         let mut fs_rng = FiatShamirRng::<Blake2s>::from_seed(&to_bytes![SHUFFLE_RNG_SEED]?);
@@ -562,19 +559,28 @@ where
         pk: &Self::PlayerPublicKey,
         m_list: &Vec<Self::Card>,
     ) -> Result<(Vec<Fr>, Self::ZKProofCardRemoval), CardProtocolError> {
-        
         if player_cards.iter().any(|card| card.is_none()) {
-            return Err(CardProtocolError::Other("Player cards cannot be None".to_string()));
+            return Err(CardProtocolError::Other(
+                "Player cards cannot be None".to_string(),
+            ));
         }
-        let player_cards = player_cards.iter().map(|card| card.unwrap()).collect::<Vec<_>>();
+        let player_cards = player_cards
+            .iter()
+            .map(|card| card.unwrap())
+            .collect::<Vec<_>>();
 
-        
         let H = shared_key;
         let H_str = Self::to_hex(H.into_projective());
         let G = pp.enc_parameters.generator;
         let G_str = Self::to_hex(G.into_projective());
 
-        let (Ca, Cb): (Vec<_>, Vec<_>) = deck
+        let mut m_list_sorted = m_list.clone();
+        m_list_sorted.sort_by_key(|card| card.0.to_string());
+
+        let mut deck_sorted = deck.clone();
+        deck_sorted.sort_by_key(|card| card.1.to_string());
+
+        let (Ca, Cb): (Vec<_>, Vec<_>) = deck_sorted
             .iter()
             .map(|masked_card| {
                 let c1 = masked_card.0; // Ca component
@@ -645,7 +651,7 @@ where
         prover.add_input("Cb2_player", BigInt::from(Cb2_player[0].clone()));
         prover.add_input("Cb2_player", BigInt::from(Cb2_player[1].clone()));
 
-        for m in m_list {
+        for m in m_list_sorted {
             let m_str = Self::to_hex(m.0.into_projective());
             prover.add_input("m", BigInt::from(m_str[0].clone()));
             prover.add_input("m", BigInt::from(m_str[1].clone()));
@@ -690,11 +696,12 @@ where
         Ok((inputs, proof))
     }
 
+    #[allow(non_snake_case)]
     fn verify_reshuffle_remask(
         verifier: &mut CircomProver,
         pp: &Self::Parameters,
         shared_key: &Self::AggregatePublicKey,
-        original_deck: &Vec<Self::MaskedCard>,
+        previous_deck: &Vec<Self::MaskedCard>,
         player_cards: &Vec<Self::MaskedCard>,
         pk: &Self::PlayerPublicKey,
         m_list: &Vec<Self::Card>,
@@ -705,6 +712,13 @@ where
         C: ProjectiveCurve,
         C::Affine: HasCoordinates + GeneratePoints<C>,
     {
+
+        let mut deck_sorted = previous_deck.clone();
+        deck_sorted.sort_by_key(|card| card.1.to_string());
+
+        let mut m_list_sorted = m_list.clone();
+        m_list_sorted.sort_by_key(|card| card.0.to_string());
+
         let verified = verifier
             .verify_proof(&public, &proof)
             .map_err(|e| CardProtocolError::Other(format!("{}", e)))?;
@@ -714,7 +728,7 @@ where
             let Ca_out = &public[2..106];
             let Cb_out = &public[106..210];
 
-            let pk = &public[210..212];
+            let pk_input = &public[210..212];
             let H = &public[212..214];
             let G = &public[214..216];
             let Ca1_player = &public[216..218];
@@ -725,13 +739,144 @@ where
             let Ca = &public[328..432];
             let Cb = &public[432..536];
 
-            // println!("Ca:out {:?}", Ca);
-            // println!("Cb:out {:?}", Cb);
+            // Verificar que H coincide con shared_key
+            let shared_key_coords = Self::to_hex(shared_key.into_projective());
+            let h_input_x = BigUint::from(H[0]);
+            let h_input_y = BigUint::from(H[1]);
 
-            // Checks
-            // if(H.to_string() != shared_key.0.to_string()) {
-            //     return Err(CardProtocolError::Other("H is not equal to shared_key.0".to_string()));
-            //
+            let pk_computed_x = BigUint::from(pk_computed[0]);
+            let pk_computed_y = BigUint::from(pk_computed[1]);
+            let pk_input_x = BigUint::from(pk_input[0]);
+            let pk_input_y = BigUint::from(pk_input[1]);
+            
+            if pk_computed_x != pk_input_x || pk_computed_y != pk_input_y {
+                return Err(CardProtocolError::Other(
+                    "Verificación fallida: La clave pública calculada no coincide con la clave pública de entrada".to_string(),
+                ));
+            }
+            
+            // También verificar que pk_input coincide con la clave pública proporcionada
+            let pk_coords = Self::to_hex(pk.into_projective());
+            if pk_coords[0] != pk_input_x || pk_coords[1] != pk_input_y {
+                return Err(CardProtocolError::Other(
+                    "Verificación fallida: La clave pública de entrada no coincide con la clave pública proporcionada".to_string(),
+                ));
+            }
+
+            if shared_key_coords[0] != h_input_x || shared_key_coords[1] != h_input_y {
+                return Err(CardProtocolError::Other(
+                    "Verificación fallida: H no coincide con shared_key".to_string(),
+                ));
+            }
+
+            if player_cards.len() != 2 {
+                return Err(CardProtocolError::Other(
+                    "Verificación fallida: Se esperaban exactamente 2 cartas de jugador".to_string(),
+                ));
+            }
+
+            // Verificar primera carta del jugador
+            let player_card1_ca_coords = Self::to_hex(player_cards[0].0.into_projective());
+            let player_card1_cb_coords = Self::to_hex(player_cards[0].1.into_projective());
+            let ca1_input_x = BigUint::from(Ca1_player[0]);
+            let ca1_input_y = BigUint::from(Ca1_player[1]);
+            let cb1_input_x = BigUint::from(Cb1_player[0]);
+            let cb1_input_y = BigUint::from(Cb1_player[1]);
+            
+            if player_card1_ca_coords[0] != ca1_input_x || player_card1_ca_coords[1] != ca1_input_y ||
+            player_card1_cb_coords[0] != cb1_input_x || player_card1_cb_coords[1] != cb1_input_y {
+                   println!("player_card1_ca_coords: {:?}", player_card1_ca_coords);
+                   println!("player_card1_cb_coords: {:?}", player_card1_cb_coords);
+                   println!("ca1_input_x: {:?}", ca1_input_x);
+                   println!("ca1_input_y: {:?}", ca1_input_y);
+                   println!("cb1_input_x: {:?}", cb1_input_x);
+                   println!("cb1_input_y: {:?}", cb1_input_y);
+                return Err(CardProtocolError::Other(
+                    "Verificación fallida: La primera carta del jugador no coincide con los datos del circuito".to_string(),
+                ));
+            }
+            
+            // Verificar segunda carta del jugador
+            let player_card2_ca_coords = Self::to_hex(player_cards[1].0.into_projective());
+            let player_card2_cb_coords = Self::to_hex(player_cards[1].1.into_projective());
+            let ca2_input_x = BigUint::from(Ca2_player[0]);
+            let ca2_input_y = BigUint::from(Ca2_player[1]);
+            let cb2_input_x = BigUint::from(Cb2_player[0]);
+            let cb2_input_y = BigUint::from(Cb2_player[1]);
+            
+            if player_card2_ca_coords[0] != ca2_input_x || player_card2_ca_coords[1] != ca2_input_y ||
+               player_card2_cb_coords[0] != cb2_input_x || player_card2_cb_coords[1] != cb2_input_y {
+                println!("player_card2_ca_coords: {:?}", player_card2_ca_coords);
+                println!("player_card2_cb_coords: {:?}", player_card2_cb_coords);
+                println!("ca2_input_x: {:?}", ca2_input_x);
+                println!("ca2_input_y: {:?}", ca2_input_y);
+                println!("cb2_input_x: {:?}", cb2_input_x);
+                println!("cb2_input_y: {:?}", cb2_input_y);
+                return Err(CardProtocolError::Other(
+                    "Verificación fallida: La segunda carta del jugador no coincide con los datos del circuito".to_string(),
+                ));
+            }
+
+            // Verificar que G coincide con pp.enc_parameters.generator
+            let generator_coords = Self::to_hex(pp.enc_parameters.generator.into_projective());
+            let g_input_x = BigUint::from(G[0]);
+            let g_input_y = BigUint::from(G[1]);
+
+            if generator_coords[0] != g_input_x || generator_coords[1] != g_input_y {
+                return Err(CardProtocolError::Other(
+                    "Verificación fallida: G no coincide con pp.enc_parameters.generator"
+                        .to_string(),
+                ));
+            }
+
+            // Separa original_deck en componentes Ca y Cb
+            let (original_Ca, original_Cb): (Vec<_>, Vec<_>) = deck_sorted
+                .iter()
+                .map(|masked_card| {
+                    let c1 = masked_card.0; // Ca component
+                    let c2 = masked_card.1; // Cb component
+                    (c1, c2)
+                })
+                .unzip();
+
+            // checks Ca and Cb
+            for i in 0..52 {
+                let original_ca_point = original_Ca[i];
+                let original_cb_point = original_Cb[i];
+
+                let original_ca_coords = Self::to_hex(original_ca_point.into_projective());
+                let original_cb_coords = Self::to_hex(original_cb_point.into_projective());
+
+                let ca_input_x = BigUint::from(Ca[i * 2]);
+                let ca_input_y = BigUint::from(Ca[i * 2 + 1]);
+                let cb_input_x = BigUint::from(Cb[i * 2]);
+                let cb_input_y = BigUint::from(Cb[i * 2 + 1]);
+
+                if original_ca_coords[0] != ca_input_x
+                    || original_ca_coords[1] != ca_input_y
+                    || original_cb_coords[0] != cb_input_x
+                    || original_cb_coords[1] != cb_input_y
+                {
+                    return Err(CardProtocolError::Other(format!(
+                        "Verificación fallida: Los componentes Ca y Cb no coinciden con los originales en la posición {}", i
+                    )));
+                }
+            }
+
+            // Verificar que los componentes m coinciden con m_list
+            for i in 0..m_list_sorted.len() {
+                let m_point = m_list_sorted[i].0;
+                let m_coords = Self::to_hex(m_point.into_projective());
+
+                let m_input_x = BigUint::from(m[i * 2]);
+                let m_input_y = BigUint::from(m[i * 2 + 1]);
+
+                if m_coords[0] != m_input_x || m_coords[1] != m_input_y {
+                    return Err(CardProtocolError::Other(format!(
+                        "Verificación fallida: Los valores de m no coinciden con m_list en la posición {}", i
+                    )));
+                }
+            }
 
             let mut masked_cards: Vec<Self::MaskedCard> = Vec::with_capacity(52);
 
@@ -752,6 +897,7 @@ where
                 let masked_card = el_gamal::Ciphertext(ca, cb);
                 masked_cards.push(masked_card);
             }
+
             println!("Verification successful!!!");
             Ok(masked_cards)
         } else {

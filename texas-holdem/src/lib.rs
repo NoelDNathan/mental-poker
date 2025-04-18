@@ -14,23 +14,26 @@ use rand::thread_rng;
 use std::collections::HashMap;
 use std::iter::Iterator;
 use thiserror::Error;
-use zk_reshuffle::CircomProver;
+use zk_reshuffle::{CircomProver};
 
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use babyjubjub::{EdwardsAffine, EdwardsProjective, Fq, Fr};
 use std::str::FromStr;
 use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, Write, Read, SerializationError};
-
+use ark_groth16::Groth16;
+use ark_bn254::{Bn254, Fr as inputBn254Fr};
 
 
 type Curve = EdwardsProjective;
 pub type Scalar = Fr;
 
+
+
 // Instantiate concrete type for our card protocol
 pub type CardProtocol<'a> = discrete_log_cards::DLCards<'a, Curve>;
 pub type CardParameters = discrete_log_cards::Parameters<Curve>;
 pub type PublicKey = discrete_log_cards::PublicKey<Curve>;
-type SecretKey = discrete_log_cards::PlayerSecretKey<Curve>;
+pub type SecretKey = discrete_log_cards::PlayerSecretKey<Curve>;
 
 pub type Card = discrete_log_cards::Card<Curve>;
 pub type MaskedCard = discrete_log_cards::MaskedCard<Curve>;
@@ -40,7 +43,7 @@ pub type ProofKeyOwnership = schnorr_identification::proof::Proof<Curve>;
 pub type RemaskingProof = chaum_pedersen_dl_equality::proof::Proof<Curve>;
 pub type RevealProof = chaum_pedersen_dl_equality::proof::Proof<Curve>;
 pub type ZKProofShuffle = proof_essentials::zkp::arguments::shuffle::proof::Proof<ark_ff::Fp256<babyjubjub::FrParameters>, proof_essentials::homomorphic_encryption::el_gamal::ElGamal<ark_ec::twisted_edwards_extended::GroupProjective<babyjubjub::EdwardsParameters>>, proof_essentials::vector_commitment::pedersen::PedersenCommitment<ark_ec::twisted_edwards_extended::GroupProjective<babyjubjub::EdwardsParameters>>>;
-
+pub type Bn254Fr = inputBn254Fr;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum GameErrors {
@@ -183,6 +186,7 @@ impl InternalPlayer {
 
         let i = i.ok_or(GameErrors::CardNotFound)?;
 
+        println!("pee at card:");
         let public_card = CardProtocol::partial_unmask(&parameters, reveal_tokens, card)?;
 
         self.cards_public[i] = Some(public_card);
@@ -192,8 +196,7 @@ impl InternalPlayer {
         let own_reveal_token = self.compute_reveal_token(rng, parameters, card)?;
         reveal_tokens.push(own_reveal_token);
 
-        println!("Reveal tokens 1: {:?}", reveal_tokens[0].0.0.to_string());
-        println!("Reveal tokens 2: {:?}", reveal_tokens[1].0.0.to_string());
+        // println!("Reveal tokens 1: {:?}", reveal_tokens[0].0.0.cards_publicto_string());
 
         let unmasked_card = CardProtocol::unmask(&parameters, reveal_tokens, card)?;
         // println!("Unmasked card: {:?}", unmasked_card.0.to_string());

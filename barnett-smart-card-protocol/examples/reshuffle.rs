@@ -609,6 +609,7 @@ async fn main() -> anyhow::Result<()> {
         .collect::<Vec<MaskedCard>>();
 
     let m_list = card_mapping.keys().cloned().collect::<Vec<Card>>();
+    
     // ReSHUFFLE TIME --------------
     let mut prover = CircomProver::new(
         "./circom-circuit/card_cancellation_v5.wasm",

@@ -23,7 +23,7 @@ type Scalar = Fr;
 type CardProtocol<'a> = discrete_log_cards::DLCards<'a, Curve>;
 type CardParameters = discrete_log_cards::Parameters<Curve>;
 type PublicKey = discrete_log_cards::PublicKey<Curve>;
-type SecretKey = discrete_log_cards::PlayerSecretKey<Curve>;
+pub type SecretKey = discrete_log_cards::PlayerSecretKey<Curve>;
 
 type Card = discrete_log_cards::Card<Curve>;
 type MaskedCard = discrete_log_cards::MaskedCard<Curve>;
