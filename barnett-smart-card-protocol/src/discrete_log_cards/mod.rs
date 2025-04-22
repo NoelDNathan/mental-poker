@@ -713,6 +713,10 @@ where
         C::Affine: HasCoordinates + GeneratePoints<C>,
     {
 
+        for card in previous_deck {
+            println!("card: {:?}", card.0.to_string());
+        }
+
         let mut deck_sorted = previous_deck.clone();
         deck_sorted.sort_by_key(|card| card.1.to_string());
 
@@ -899,6 +903,8 @@ where
             }
 
             println!("Verification successful!!!");
+            // println!("Reshuffled deck: {:?}", masked_cards);
+
             Ok(masked_cards)
         } else {
             Err(CardProtocolError::Other("Verification failed".to_string()))

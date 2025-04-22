@@ -252,12 +252,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         peer_last_seen.remove(&peer_id);
                         is_reshuffling = true;
                         match handle_disconnected_player(rng, &mut swarm, &topic, &mut prover, &pp, &mut deck, &mut card_mapping, &player_id, &player, &mut joint_pk, &connected_peers, current_dealer){
-                            Ok((Some(reshuffled_deck), aggregate_key)) => {
+                            Ok((reshuffled_deck, aggregate_key, current_reshuffler_val)) => {
                                 deck = Some(reshuffled_deck);
                                 joint_pk = Some(aggregate_key);
-                            }
-                            Ok((None, aggregate_key)) => {
-                                joint_pk = Some(aggregate_key);
+                                current_reshuffler = current_reshuffler_val;
+                                num_players_expected -=1;
                             }
                             Err(e) => {
                                 println!("Error handling disconnected player: {:?}", e);
@@ -389,12 +388,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         is_reshuffling = true;
 
                          match handle_disconnected_player(rng, &mut swarm, &topic, &mut prover, &pp, &mut deck, &mut card_mapping, &player_id, &player, &mut joint_pk, &connected_peers, current_dealer){
-                            Ok((Some(reshuffled_deck), aggregate_key)) => {
+                            Ok((reshuffled_deck, aggregate_key, current_reshuffler_val)) => {
                                 deck = Some(reshuffled_deck);
                                 joint_pk = Some(aggregate_key);
-                            }
-                            Ok((None, aggregate_key)) => {
-                                joint_pk = Some(aggregate_key);
+                                current_reshuffler = current_reshuffler_val;
+                                num_players_expected -=1;
                             }
                             Err(e) => {
                                 println!("Error handling disconnected player: {:?}", e);
@@ -466,7 +464,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                                     joint_pk = Some(aggregate_key);
                                                     println!("Joint public key: {:?}", aggregate_key.to_string());
 
-                                                    if current_dealer == player_id.parse::<u8>().unwrap(){
+                                                    if is_dealer(current_dealer, &player_id){
                                                         println!("All players connected, starting game");
                                                         let (shuffled_deck, card_mapping_val) = dealt_cards(&mut swarm, &topic, &pp, rng, &aggregate_key).unwrap();
                                                         deck = Some(shuffled_deck.clone());
@@ -563,9 +561,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                                                 match find_player_by_id(&mut connected_peers, i as u8){
                                                                     Some((peer_id, player_info)) => {
                                                                         player_info.reveal_tokens[0].push(new_token1);
-                                                                        println!("Reveal token 1 length: {:?}", player_info.reveal_tokens[0].len());
                                                                         player_info.reveal_tokens[1].push(new_token2);
-                                                                        println!("Reveal token 2 length: {:?}", player_info.reveal_tokens[1].len());
                                                                     }
                                                                     None => {
                                                                         println!("No se encontró al jugador con id {}", i);
@@ -741,15 +737,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                                 ProtocolMessage::ZKProofRemoveAndRemaskChunk(i, length, chunk) => {
                                     public_reshuffle_bytes.push((i, chunk.clone()));
-                                    println!("i: {:?}", i);
-                                    println!("length: {:?}", length);
+
                                     if i == length - 1{
                                         is_all_public_reshuffle_bytes_received = true;
                                         if proof_reshuffle_bytes.len() > 0 {
                                             println!("No proof reshuffle bytes");
                                         }
                                         else if proof_reshuffle_bytes.len() == 1 {
-
 
                                             match find_player_by_id(&mut connected_peers, current_reshuffler) {
                                                 Some((peer_id, player_info)) => {
@@ -776,7 +770,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                                                             current_reshuffler += 1;
 
-                                                            if current_reshuffler == player_id.parse::<u8>().unwrap(){
+                                                            if is_dealer(current_reshuffler, &player_id){
 
                                                                 if let Some(card_mapping) = &card_mapping {
 
@@ -830,6 +824,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                                     if is_all_public_reshuffle_bytes_received {
 
+                                        // debería crear una fución de esto
+                                        // añadir aleatoriedad a las cartas xd
                                         match find_player_by_id(&mut connected_peers, current_reshuffler) {
                                             Some((peer_id, player_info)) => {
 
@@ -855,15 +851,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                                                         current_reshuffler += 1;
 
-                                                        if current_reshuffler == player_id.parse::<u8>().unwrap(){
+                                                        if is_dealer(current_reshuffler, &player_id){
 
                                                             if let Some(card_mapping) = &card_mapping {
 
                                                                 let m_list = card_mapping.keys().cloned().collect::<Vec<Card>>();
                                                                 match send_remask_for_reshuffle(&mut swarm, &topic, &mut prover, &pp, &joint_pk.as_ref().unwrap(), &reshuffled_deck, &player, &m_list){
                                                                     Ok((public, proof)) => {
-
-
                                                                         let reshuffled_deck = CardProtocol::verify_reshuffle_remask(
                                                                             &mut prover,
                                                                             &pp,
@@ -885,6 +879,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                                             }
                                                             else{
                                                                 println!("No se puede revelar la carta: card_mapping aún no está inicializada");
+                                                            }
+                                                        }
+
+                                                        println!("current_reshuffler: {:?}", current_reshuffler);
+                                                        if current_reshuffler == 2 {
+                                                            println!("All reshuffled");
+
+                                                            if is_dealer(current_dealer, &player_id){
+                                                                println!("Starting shuffling and remasking");
+                                                                let shuffled_deck = shuffle_remask_and_send(&mut swarm, &topic, &pp, rng, joint_pk.as_ref().unwrap(), &deck.as_ref().unwrap(), m, n)?;
+                                                                deck = Some(shuffled_deck);
                                                             }
                                                         }
                                                     }
@@ -978,7 +983,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 }
-
 
 fn find_player_by_id(
     connected_peers: &mut HashMap<libp2p::PeerId, PlayerInfo>,
@@ -1229,7 +1233,7 @@ fn handle_disconnected_player(
     joint_pk: &mut Option<PublicKey>,
     connected_peers: &HashMap<libp2p::PeerId, PlayerInfo>,
     current_dealer: u8,
-) -> Result<(Option<Vec<MaskedCard>>, PublicKey), Box<dyn Error>> {
+) -> Result<(Vec<MaskedCard>, PublicKey, u8), Box<dyn Error>> {
     println!("Starting reshuffle");
 
     let seed = [1; 32];
@@ -1252,22 +1256,20 @@ fn handle_disconnected_player(
             *joint_pk = Some(aggregate_key);
             println!("Joint public key: {:?}", aggregate_key.to_string());
 
-            if current_dealer == player_id.parse::<u8>().unwrap() {
-                if let Some(card_mapping) = _card_mapping {
-                    let deck_and_proofs: Vec<(MaskedCard, RemaskingProof)> = card_mapping
-                        .keys()
-                        .map(|card| {
-                            CardProtocol::mask(rng, &pp, &aggregate_key, &card, &Scalar::one())
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
+            if let Some(card_mapping) = _card_mapping {
+                let deck_and_proofs: Vec<(MaskedCard, RemaskingProof)> = card_mapping
+                    .keys()
+                    .map(|card| CardProtocol::mask(rng, &pp, &aggregate_key, &card, &Scalar::one()))
+                    .collect::<Result<Vec<_>, _>>()?;
 
-                    let new_deck = deck_and_proofs
-                        .iter()
-                        .map(|x| x.0)
-                        .collect::<Vec<MaskedCard>>();
+                let new_deck = deck_and_proofs
+                    .iter()
+                    .map(|x| x.0)
+                    .collect::<Vec<MaskedCard>>();
 
-                    let m_list = card_mapping.keys().cloned().collect::<Vec<Card>>();
+                let m_list = card_mapping.keys().cloned().collect::<Vec<Card>>();
 
+                if is_dealer(current_dealer, &player_id) {
                     match send_remask_for_reshuffle(
                         swarm,
                         topic,
@@ -1299,17 +1301,23 @@ fn handle_disconnected_player(
                                 public,
                                 proof,
                             )?;
-                            return Ok((Some(reshuffled_deck), aggregate_key));
+                            // Si es dealer, suma a current_reshuffler (1)
+                            Ok((reshuffled_deck, aggregate_key, 1))
                         }
                         Err(e) => {
                             println!("Error sending remask for reshuffle: {:?}", e);
-                            return Err(e.into());
+                            Err(e.into())
                         }
                     }
+                } else {
+                    // Si no es dealer, no suma a current_reshuffler
+                    Ok((new_deck, aggregate_key, 0))
                 }
+            } else {
+                Err("No card mapping available".into())
             }
-            Ok((None, aggregate_key))
         }
+
         Err(e) => {
             println!("Error computing aggregate key: {:?}", e);
             Err(Box::new(e))
@@ -1326,7 +1334,7 @@ pub fn verify_remask_for_reshuffle(
     public_bytes: &[(u8, Vec<u8>)],
     proof_bytes: &[u8],
     joint_pk: &PublicKey,
-    deck: &Vec<MaskedCard>,
+    new_deck: &Vec<MaskedCard>,
     player_cards: &Vec<MaskedCard>,
     pk: &PublicKey,
 ) -> Result<Vec<MaskedCard>, Box<dyn Error>> {
@@ -1341,19 +1349,6 @@ pub fn verify_remask_for_reshuffle(
     if let Some(card_mapping) = &card_mapping {
         let m_list = card_mapping.keys().cloned().collect::<Vec<Card>>();
         let proof = deserialize_proof(&proof_bytes)?;
-
-        let seed = [1; 32];
-        let rng = &mut rand::rngs::StdRng::from_seed(seed);
-
-        let deck_and_proofs: Vec<(MaskedCard, RemaskingProof)> = card_mapping
-            .keys()
-            .map(|card| CardProtocol::mask(rng, &pp, &joint_pk, &card, &Scalar::one()))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let new_deck = deck_and_proofs
-            .iter()
-            .map(|x| x.0)
-            .collect::<Vec<MaskedCard>>();
 
         let public_fr: Vec<Bn254Fr> = public_strings
             .iter()
@@ -1381,10 +1376,7 @@ pub fn verify_remask_for_reshuffle(
             public_fr,
             proof,
         ) {
-            Ok(reshuffled_deck) => {
-                println!("Reshuffled deck: {:?}", reshuffled_deck);
-                Ok(reshuffled_deck)
-            }
+            Ok(reshuffled_deck) => Ok(reshuffled_deck),
             Err(e) => {
                 println!("Error verifying reshuffle remask: {:?}", e);
                 Err(Box::new(e))
@@ -1407,4 +1399,149 @@ fn deserializar_chunks_a_strings(
     }
 
     Ok(resultado)
+}
+
+fn is_dealer(current_dealer: u8, player_id: &String) -> bool {
+    current_dealer == player_id.parse::<u8>().unwrap()
+}
+
+fn process_reshuffle_verification(
+    connected_peers: &mut HashMap<libp2p::PeerId, PlayerInfo>,
+    current_reshuffler: u8,
+    swarm: &mut libp2p::Swarm<MyBehaviour>,
+    topic: &gossipsub::IdentTopic,
+    prover: &mut CircomProver,
+    pp: &CardParameters,
+    card_mapping: &mut Option<HashMap<Card, ClassicPlayingCard>>,
+    public_reshuffle_bytes: &[(u8, Vec<u8>)],
+    proof_reshuffle_bytes: &[u8],
+    joint_pk: &PublicKey,
+    deck: &Vec<MaskedCard>,
+    player: &InternalPlayer,
+    player_id: &String,
+    current_dealer: u8,
+    m: usize,
+    n: usize,
+    rng: &mut rand::rngs::StdRng,
+) -> Result<(Vec<MaskedCard>, u8), Box<dyn Error>> {
+    match find_player_by_id(connected_peers, current_reshuffler) {
+        Some((_, player_info)) => {
+            let cards_vec: Vec<MaskedCard> = player_info
+                .cards_public
+                .iter()
+                .filter_map(|card| card.clone())
+                .collect();
+
+            match verify_remask_for_reshuffle(
+                swarm,
+                topic,
+                prover,
+                pp,
+                card_mapping,
+                public_reshuffle_bytes,
+                proof_reshuffle_bytes,
+                joint_pk,
+                deck,
+                &cards_vec,
+                &player_info.pk,
+            ) {
+                Ok(reshuffled_deck) => {
+                    let new_reshuffler = current_reshuffler + 1;
+
+                    if is_dealer(new_reshuffler, player_id) {
+                        if let Some(card_mapping_val) = card_mapping {
+                            let m_list = card_mapping_val.keys().cloned().collect::<Vec<Card>>();
+                            match send_remask_for_reshuffle(
+                                swarm,
+                                topic,
+                                prover,
+                                pp,
+                                joint_pk,
+                                &reshuffled_deck,
+                                player,
+                                &m_list,
+                            ) {
+                                Ok((public, proof)) => {
+                                    let final_deck = CardProtocol::verify_reshuffle_remask(
+                                        prover,
+                                        pp,
+                                        joint_pk,
+                                        &reshuffled_deck,
+                                        &player
+                                            .cards_public
+                                            .iter()
+                                            .filter_map(|card| card.clone())
+                                            .collect::<Vec<_>>(),
+                                        &player.pk,
+                                        &m_list,
+                                        public,
+                                        proof,
+                                    )?;
+
+                                    if new_reshuffler == 2 {
+                                        println!("All reshuffled");
+
+                                        if is_dealer(current_dealer, player_id) {
+                                            println!("Starting shuffling and remasking");
+                                            let shuffled_deck = shuffle_remask_and_send(
+                                                swarm,
+                                                topic,
+                                                pp,
+                                                rng,
+                                                joint_pk,
+                                                &final_deck,
+                                                m,
+                                                n,
+                                            )?;
+                                            return Ok((shuffled_deck, new_reshuffler));
+                                        }
+                                    }
+
+                                    Ok((final_deck, new_reshuffler))
+                                }
+                                Err(e) => {
+                                    println!("Error sending remask for reshuffle: {:?}", e);
+                                    Err(e.into())
+                                }
+                            }
+                        } else {
+                            println!("No se puede revelar la carta: card_mapping aún no está inicializada");
+                            Ok((reshuffled_deck, new_reshuffler))
+                        }
+                    } else {
+                        println!("current_reshuffler: {:?}", new_reshuffler);
+                        if new_reshuffler == 2 {
+                            println!("All reshuffled");
+
+                            if is_dealer(current_dealer, player_id) {
+                                println!("Starting shuffling and remasking");
+                                let shuffled_deck = shuffle_remask_and_send(
+                                    swarm,
+                                    topic,
+                                    pp,
+                                    rng,
+                                    joint_pk,
+                                    &reshuffled_deck,
+                                    m,
+                                    n,
+                                )?;
+                                return Ok((shuffled_deck, new_reshuffler));
+                            }
+                        }
+
+                        Ok((reshuffled_deck, new_reshuffler))
+                    }
+                }
+                Err(e) => {
+                    println!("Error verifying reshuffle remask: {:?}", e);
+                    Err(e.into())
+                }
+            }
+        }
+        None => Err(format!(
+            "Error: No se encontró al jugador con id {}",
+            current_reshuffler
+        )
+        .into()),
+    }
 }
