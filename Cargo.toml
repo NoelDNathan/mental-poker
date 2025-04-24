@@ -5,4 +5,4 @@ members = [
     "barnett-smart-card-protocol",
     "zk-reshuffle", 
     "babyjubjub", 
-    "proof-essentials", "texas-holdem", "p2p-connection4"]
+    "proof-essentials", "texas-holdem", "p2p-connection4", "p2p-neon"]
