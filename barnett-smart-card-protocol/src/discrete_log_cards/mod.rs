@@ -26,7 +26,7 @@ use proof_essentials::vector_commitment::{pedersen, HomomorphicCommitmentScheme}
 use proof_essentials::zkp::{
     arguments::shuffle,
     proofs::{chaum_pedersen_dl_equality, schnorr_identification},
-    ArgumentOfKnowledge,
+    ArgumentOfKnowledge, ArgumentOfKnowledgeSchnorr,
 };
 use std::marker::PhantomData;
 
@@ -36,6 +36,7 @@ use regex;
 use zk_reshuffle::{CircomProver, Proof};
 
 use num_bigint::BigInt;
+use sha3::{Digest, Keccak256};
 
 // mod key_ownership;
 mod masking;
@@ -185,15 +186,16 @@ where
         sk: &Self::PlayerSecretKey,
         player_public_info: &B,
     ) -> Result<Self::ZKProofKeyOwnership, CryptoError> {
-        let mut fs_rng =
-            FiatShamirRng::<Blake2s>::from_seed(&to_bytes![KEY_OWN_RNG_SEED, player_public_info]?);
-
+        
+        let mut hasher = Keccak256::new();
+        // hasher.update(&to_bytes![KEY_OWN_RNG_SEED]?);
+        
         schnorr_identification::SchnorrIdentification::prove(
             rng,
             &pp.enc_parameters.generator,
             pk,
             sk,
-            &mut fs_rng,
+            &mut hasher,
         )
     }
 
@@ -203,13 +205,15 @@ where
         player_public_info: &B,
         proof: &Self::ZKProofKeyOwnership,
     ) -> Result<(), CryptoError> {
-        let mut fs_rng =
-            FiatShamirRng::<Blake2s>::from_seed(&to_bytes![KEY_OWN_RNG_SEED, player_public_info]?);
+
+        let mut hasher = Keccak256::new();
+        // hasher.update(&to_bytes![KEY_OWN_RNG_SEED]?);
+
         schnorr_identification::SchnorrIdentification::verify(
             &pp.enc_parameters.generator,
             pk,
             proof,
-            &mut fs_rng,
+            &mut hasher,
         )
     }
 
@@ -248,13 +252,15 @@ where
         let cp_statement =
             chaum_pedersen_dl_equality::Statement::new(&masked_card.0, &statement_cipher);
 
-        let mut fs_rng = FiatShamirRng::<Blake2s>::from_seed(&to_bytes![MASKING_RNG_SEED]?);
+        let mut hasher = Keccak256::new();
+        // hasher.update(&to_bytes![KEY_OWN_RNG_SEED]?);
+
         let proof = chaum_pedersen_dl_equality::DLEquality::prove(
             rng,
             &cp_parameters,
             &cp_statement,
             r,
-            &mut fs_rng,
+            &mut hasher,
         )?;
 
         Ok((masked_card, proof))
@@ -278,12 +284,14 @@ where
         let cp_statement =
             chaum_pedersen_dl_equality::Statement::new(&masked_card.0, &statement_cipher);
 
-        let mut fs_rng = FiatShamirRng::<Blake2s>::from_seed(&to_bytes![MASKING_RNG_SEED]?);
+        let mut hasher = Keccak256::new();
+        // hasher.update(&to_bytes![KEY_OWN_RNG_SEED]?);
+
         chaum_pedersen_dl_equality::DLEquality::verify(
             &cp_parameters,
             &cp_statement,
             proof,
-            &mut fs_rng,
+            &mut hasher,
         )
     }
 
@@ -307,13 +315,15 @@ where
         let cp_statement =
             chaum_pedersen_dl_equality::Statement::new(&statement_cipher.0, &statement_cipher.1);
 
-        let mut fs_rng = FiatShamirRng::<Blake2s>::from_seed(&to_bytes![REMASKING_RNG_SEED]?);
+        let mut hasher = Keccak256::new();
+        // hasher.update(&to_bytes![KEY_OWN_RNG_SEED]?);
+
         let proof = chaum_pedersen_dl_equality::DLEquality::prove(
             rng,
             &cp_parameters,
             &cp_statement,
             alpha,
-            &mut fs_rng,
+            &mut hasher,
         )?;
 
         Ok((remasked, proof))
@@ -337,12 +347,14 @@ where
         let cp_statement =
             chaum_pedersen_dl_equality::Statement::new(&statement_cipher.0, &statement_cipher.1);
 
-        let mut fs_rng = FiatShamirRng::<Blake2s>::from_seed(&to_bytes![REMASKING_RNG_SEED]?);
+        let mut hasher = Keccak256::new();
+        // hasher.update(&to_bytes![KEY_OWN_RNG_SEED]?);
+
         chaum_pedersen_dl_equality::DLEquality::verify(
             &cp_parameters,
             &cp_statement,
             proof,
-            &mut fs_rng,
+            &mut hasher,
         )
     }
 
@@ -365,13 +377,15 @@ where
         // Map to Chaum-Pedersen parameters
         let cp_statement = chaum_pedersen_dl_equality::Statement::new(&reveal_token.0, pk);
 
-        let mut fs_rng = FiatShamirRng::<Blake2s>::from_seed(&to_bytes![REVEAL_RNG_SEED]?);
+        let mut hasher = Keccak256::new();
+        // hasher.update(&to_bytes![KEY_OWN_RNG_SEED]?);
+
         let proof = chaum_pedersen_dl_equality::DLEquality::prove(
             rng,
             &cp_parameters,
             &cp_statement,
             sk,
-            &mut fs_rng,
+            &mut hasher,
         )?;
 
         Ok((reveal_token, proof))
@@ -393,12 +407,14 @@ where
         // Map to Chaum-Pedersen parameters
         let cp_statement = chaum_pedersen_dl_equality::Statement::new(&reveal_token.0, pk);
 
-        let mut fs_rng = FiatShamirRng::<Blake2s>::from_seed(&to_bytes![REVEAL_RNG_SEED]?);
+        let mut hasher = Keccak256::new();
+        // hasher.update(&to_bytes![KEY_OWN_RNG_SEED]?);
+
         chaum_pedersen_dl_equality::DLEquality::verify(
             &cp_parameters,
             &cp_statement,
             proof,
-            &mut fs_rng,
+            &mut hasher,
         )
     }
 

@@ -3,12 +3,12 @@ pub mod prover;
 mod test;
 
 use crate::error::CryptoError;
-use crate::zkp::ArgumentOfKnowledge;
+use crate::zkp::ArgumentOfKnowledgeSchnorr;
 use ark_ec::ProjectiveCurve;
-use ark_marlin::rng::FiatShamirRng;
 use ark_std::marker::PhantomData;
 use ark_std::rand::Rng;
-use digest::Digest;
+use sha3::digest::FixedOutputReset;
+use sha3::Digest;
 
 pub struct DLEquality<'a, C: ProjectiveCurve> {
     _group: PhantomData<&'a C>,
@@ -40,7 +40,7 @@ impl<'a, C: ProjectiveCurve> Statement<'a, C> {
 
 type Witness<C> = <C as ProjectiveCurve>::ScalarField;
 
-impl<'a, C> ArgumentOfKnowledge for DLEquality<'a, C>
+impl<'a, C> ArgumentOfKnowledgeSchnorr for DLEquality<'a, C>
 where
     C: ProjectiveCurve,
 {
@@ -49,22 +49,22 @@ where
     type Witness = Witness<C>;
     type Proof = proof::Proof<C>;
 
-    fn prove<R: Rng, D: Digest>(
+    fn prove<R: Rng, D: Digest + FixedOutputReset>(
         rng: &mut R,
         common_reference_string: &Self::CommonReferenceString,
         statement: &Self::Statement,
         witness: &Self::Witness,
-        fs_rng: &mut FiatShamirRng<D>,
+        hasher: &mut D,
     ) -> Result<Self::Proof, CryptoError> {
-        prover::Prover::create_proof(rng, common_reference_string, statement, witness, fs_rng)
+        prover::Prover::create_proof(rng, common_reference_string, statement, witness, hasher)
     }
 
-    fn verify<D: Digest>(
+    fn verify<D: Digest + FixedOutputReset>(
         common_reference_string: &Self::CommonReferenceString,
         statement: &Self::Statement,
         proof: &Self::Proof,
-        fs_rng: &mut FiatShamirRng<D>,
+        hasher: &mut D,
     ) -> Result<(), CryptoError> {
-        proof.verify(common_reference_string, statement, fs_rng)
+        proof.verify(common_reference_string, statement, hasher)
     }
 }

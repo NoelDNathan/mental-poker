@@ -1,6 +1,7 @@
 use barnett_smart_card_protocol::discrete_log_cards;
 use barnett_smart_card_protocol::error::CardProtocolError;
 use barnett_smart_card_protocol::BarnettSmartProtocol;
+use rand::SeedableRng;
 
 use anyhow;
 use ark_ff::{to_bytes, UniformRand};
@@ -610,10 +611,13 @@ async fn main() -> anyhow::Result<()> {
 
     let m_list = card_mapping.keys().cloned().collect::<Vec<Card>>();
     
+    let seed = [0; 32];
+    let rng = &mut rand::rngs::StdRng::from_seed(seed);
     // ReSHUFFLE TIME --------------
     let mut prover = CircomProver::new(
         "./circom-circuit/card_cancellation_v5.wasm",
         "./circom-circuit/card_cancellation_v5.r1cs",
+        rng
     )
     .map_err(|e| CardProtocolError::Other(format!("{}", e)))?;
 

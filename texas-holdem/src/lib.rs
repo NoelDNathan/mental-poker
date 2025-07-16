@@ -180,7 +180,7 @@ impl InternalPlayer {
         reveal_tokens: &mut Vec<(RevealToken, RevealProof, PublicKey)>,
         card_mappings: &HashMap<Card, ClassicPlayingCard>,
         card: &MaskedCard,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(ClassicPlayingCard), anyhow::Error> {
 
         let i: Option<usize> = self.cards.iter().position(|&x| x == *card);
 
@@ -210,7 +210,7 @@ impl InternalPlayer {
         let opened_card = opened_card.ok_or(GameErrors::InvalidCard)?;
         
         self.opened_cards[i] = Some(*opened_card);
-        Ok(())
+        Ok(*opened_card)
     }
 
     pub fn compute_reveal_token<R: Rng>(

@@ -22,3 +22,4 @@ babyjubjub = { path = "../babyjubjub" }
 ark-ec = "0.3.0"
 proof-essentials = { path = "../proof-essentials" }
 zk-reshuffle = { path = "../zk-reshuffle" }
+hex = "0.4"

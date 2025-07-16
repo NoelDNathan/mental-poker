@@ -177,15 +177,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut card_mapping: Option<HashMap<Card, ClassicPlayingCard>> = None;
     let mut deck: Option<Vec<MaskedCard>> = None;
 
-    let mut prover = CircomProver::new(
+    let mut prover_reshuffle = CircomProver::new(
         "./circom-circuit/card_cancellation_v5.wasm",
         "./circom-circuit/card_cancellation_v5.r1cs",
         rng,
     )
     .map_err(|e| CardProtocolError::Other(format!("{}", e)))?;
 
+
+
+
+
     let mut first_message = true;
-    let mut num_players_expected = 3;
+    let mut num_players_expected = 2;
     let mut current_dealer = 0;
     let mut players_connected = 1;
     let mut current_shuffler = 0;
@@ -251,7 +255,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         players_connected -= 1;
                         peer_last_seen.remove(&peer_id);
                         is_reshuffling = true;
-                        match handle_disconnected_player(rng, &mut swarm, &topic, &mut prover, &pp, &mut deck, &mut card_mapping, &player_id, &player, &mut joint_pk, &connected_peers, current_dealer){
+                        match handle_disconnected_player(rng, &mut swarm, &topic, &mut prover_reshuffle, &pp, &mut deck, &mut card_mapping, &player_id, &player, &mut joint_pk, &connected_peers, current_dealer){
                             Ok((reshuffled_deck, aggregate_key, current_reshuffler_val)) => {
                                 deck = Some(reshuffled_deck);
                                 joint_pk = Some(aggregate_key);
@@ -275,6 +279,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         public_key: serialize_canonical(&player.pk).unwrap(),
                         proof_key: serialize_canonical(&player.proof_key).unwrap(),
                     };
+                    
+                    let proof_key_bytes = serialize_canonical(&player.proof_key).unwrap();
+                    println!("proof_key (hex): {}", hex::encode(&proof_key_bytes));
+
                     let message = ProtocolMessage::PublicKeyInfo(public_key_info);
                     if let Err(e) = send_protocol_message(&mut swarm, &topic, &message) {
                         println!("Error sending public key info: {:?}", e);
@@ -387,7 +395,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         peer_last_seen.remove(&peer_id);
                         is_reshuffling = true;
 
-                         match handle_disconnected_player(rng, &mut swarm, &topic, &mut prover, &pp, &mut deck, &mut card_mapping, &player_id, &player, &mut joint_pk, &connected_peers, current_dealer){
+                         match handle_disconnected_player(rng, &mut swarm, &topic, &mut prover_reshuffle, &pp, &mut deck, &mut card_mapping, &player_id, &player, &mut joint_pk, &connected_peers, current_dealer){
                             Ok((reshuffled_deck, aggregate_key, current_reshuffler_val)) => {
                                 deck = Some(reshuffled_deck);
                                 joint_pk = Some(aggregate_key);
@@ -750,7 +758,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                                 current_reshuffler,
                                                 &mut swarm,
                                                 &topic,
-                                                &mut prover,
+                                                &mut prover_reshuffle,
                                                 &pp,
                                                 &mut card_mapping,
                                                 &public_reshuffle_bytes,
@@ -790,7 +798,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                             current_reshuffler,
                                             &mut swarm,
                                             &topic,
-                                            &mut prover,
+                                            &mut prover_reshuffle,
                                             &pp,
                                             &mut card_mapping,
                                             &public_reshuffle_bytes,
@@ -996,7 +1004,7 @@ fn deserialize_remask_chunks(chunks: &[(u8, Vec<u8>)]) -> Result<Vec<String>, Bo
 fn send_remask_for_reshuffle(
     swarm: &mut libp2p::Swarm<MyBehaviour>,
     topic: &gossipsub::IdentTopic,
-    prover: &mut CircomProver,
+    prover_reshuffle: &mut CircomProver,
     pp: &CardParameters,
     shared_key: &PublicKey,
     new_deck: &Vec<MaskedCard>,
@@ -1017,7 +1025,7 @@ fn send_remask_for_reshuffle(
     }
 
     match CardProtocol::remask_for_reshuffle(
-        prover,
+        prover_reshuffle,
         &mut r_prime,
         &pp,
         shared_key,
@@ -1086,7 +1094,7 @@ fn handle_disconnected_player(
     rng: &mut rand::rngs::StdRng,
     swarm: &mut libp2p::Swarm<MyBehaviour>,
     topic: &gossipsub::IdentTopic,
-    prover: &mut CircomProver,
+    prover_reshuffle: &mut CircomProver,
     pp: &CardParameters,
     deck: &mut Option<Vec<MaskedCard>>,
     _card_mapping: &mut Option<HashMap<Card, ClassicPlayingCard>>,
@@ -1135,7 +1143,7 @@ fn handle_disconnected_player(
                     match send_remask_for_reshuffle(
                         swarm,
                         topic,
-                        prover,
+                        prover_reshuffle,
                         pp,
                         &aggregate_key,
                         &new_deck,
@@ -1149,7 +1157,7 @@ fn handle_disconnected_player(
                             println!("Public cards 2: {:?}", public_cards_2.0.to_string());
 
                             let reshuffled_deck = CardProtocol::verify_reshuffle_remask(
-                                prover,
+                                prover_reshuffle,
                                 pp,
                                 joint_pk.as_ref().unwrap(),
                                 &new_deck,
@@ -1190,7 +1198,7 @@ fn handle_disconnected_player(
 pub fn verify_remask_for_reshuffle(
     swarm: &mut libp2p::Swarm<MyBehaviour>,
     topic: &gossipsub::IdentTopic,
-    prover: &mut CircomProver,
+    prover_reshuffle: &mut CircomProver,
     pp: &CardParameters,
     card_mapping: &mut Option<HashMap<Card, ClassicPlayingCard>>,
     public_bytes: &[(u8, Vec<u8>)],
@@ -1228,7 +1236,7 @@ pub fn verify_remask_for_reshuffle(
             .collect();
 
         match CardProtocol::verify_reshuffle_remask(
-            prover,
+            prover_reshuffle,
             &pp,
             &joint_pk,
             &new_deck,
@@ -1272,7 +1280,7 @@ fn process_reshuffle_verification(
     current_reshuffler: u8,
     swarm: &mut libp2p::Swarm<MyBehaviour>,
     topic: &gossipsub::IdentTopic,
-    prover: &mut CircomProver,
+    prover_reshuffle: &mut CircomProver,
     pp: &CardParameters,
     card_mapping: &mut Option<HashMap<Card, ClassicPlayingCard>>,
     public_reshuffle_bytes: &[(u8, Vec<u8>)],
@@ -1297,7 +1305,7 @@ fn process_reshuffle_verification(
             match verify_remask_for_reshuffle(
                 swarm,
                 topic,
-                prover,
+                prover_reshuffle,
                 pp,
                 card_mapping,
                 public_reshuffle_bytes,
@@ -1316,7 +1324,7 @@ fn process_reshuffle_verification(
                             match send_remask_for_reshuffle(
                                 swarm,
                                 topic,
-                                prover,
+                                prover_reshuffle,
                                 pp,
                                 joint_pk,
                                 &reshuffled_deck,
@@ -1325,7 +1333,7 @@ fn process_reshuffle_verification(
                             ) {
                                 Ok((public, proof)) => {
                                     let final_deck = CardProtocol::verify_reshuffle_remask(
-                                        prover,
+                                        prover_reshuffle,
                                         pp,
                                         joint_pk,
                                         &reshuffled_deck,
