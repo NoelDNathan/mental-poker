@@ -29,13 +29,13 @@ impl<C: ProjectiveCurve> Proof<C> {
         hasher: &mut D,
     ) -> Result<(), CryptoError> {
 
-        println!("verify parameters.g (P): {:?}", parameters.g.to_string());
-        println!("verify parameters.h (Q): {:?}", parameters.h.to_string());
-        println!("verify statement.0 (R): {:?}", statement.0.to_string());
-        println!("verify statement.1 (S): {:?}", statement.1.to_string());
-        println!("verify self.a: {:?}", self.a.to_string());
-        println!("verify self.b: {:?}", self.b.to_string());
-        println!("verify self.r (s): {:?}", self.r.to_string());
+        // println!("verify parameters.g (P): {:?}", parameters.g.to_string());
+        // println!("verify parameters.h (Q): {:?}", parameters.h.to_string());
+        // println!("verify statement.0 (R): {:?}", statement.0.to_string());
+        // println!("verify statement.1 (S): {:?}", statement.1.to_string());
+        // println!("verify self.a: {:?}", self.a.to_string());
+        // println!("verify self.b: {:?}", self.b.to_string());
+        // println!("verify self.r (s): {:?}", self.r.to_string());
 
         let bytes = to_bytes![
             b"chaum_pedersen",

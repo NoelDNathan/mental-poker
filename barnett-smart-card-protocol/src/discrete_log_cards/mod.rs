@@ -144,7 +144,7 @@ where
     type ZKProofRemasking = chaum_pedersen_dl_equality::proof::Proof<C>;
     type ZKProofReveal = chaum_pedersen_dl_equality::proof::Proof<C>;
     type ZKProofShuffle = shuffle::proof::Proof<Self::Scalar, Self::Enc, Self::Comm>;
-    type ZKProofCardRemoval = Proof;
+    type ZKProofGroth16 = Proof;
 
     type Point = C;
 
@@ -186,10 +186,9 @@ where
         sk: &Self::PlayerSecretKey,
         player_public_info: &B,
     ) -> Result<Self::ZKProofKeyOwnership, CryptoError> {
-        
         let mut hasher = Keccak256::new();
         // hasher.update(&to_bytes![KEY_OWN_RNG_SEED]?);
-        
+
         schnorr_identification::SchnorrIdentification::prove(
             rng,
             &pp.enc_parameters.generator,
@@ -205,7 +204,6 @@ where
         player_public_info: &B,
         proof: &Self::ZKProofKeyOwnership,
     ) -> Result<(), CryptoError> {
-
         let mut hasher = Keccak256::new();
         // hasher.update(&to_bytes![KEY_OWN_RNG_SEED]?);
 
@@ -464,7 +462,8 @@ where
 
         let neg_one = -C::ScalarField::one();
         let negative_token = aggregate_token.0.mul(neg_one).into_affine();
-        let partial_decrypted: el_gamal::Ciphertext<C> = el_gamal::Ciphertext(masked_card.0, masked_card.1 + negative_token);
+        let partial_decrypted: el_gamal::Ciphertext<C> =
+            el_gamal::Ciphertext(masked_card.0, masked_card.1 + negative_token);
 
         Ok(partial_decrypted)
     }
@@ -534,6 +533,218 @@ where
         )
     }
 
+    #[allow(non_snake_case)]
+    fn shuffle_and_remask2(
+        prover: &mut CircomProver,
+        permutation: &Permutation,
+        r_prime: &mut Vec<Self::Scalar>,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        deck: &Vec<Self::MaskedCard>,
+    ) -> Result<(Vec<Fr>, Self::ZKProofGroth16), CardProtocolError> {
+        let H = shared_key;
+        let H_str = Self::to_hex(H.into_projective());
+        let G = pp.enc_parameters.generator;
+        let G_str = Self::to_hex(G.into_projective());
+
+        let mut deck_sorted = deck.clone();
+        deck_sorted.sort_by_key(|card| card.1.to_string());
+
+        let (Ca, Cb): (Vec<_>, Vec<_>) = deck_sorted
+            .iter()
+            .map(|masked_card| {
+                let c1 = masked_card.0; // Ca component
+                let c2 = masked_card.1; // Cb component
+                (c1, c2)
+            })
+            .unzip();
+
+        for i in 0..52 {
+            let r = &r_prime[i];
+            let r_str = Self::parse_and_convert_to_decimal(&r.to_string());
+            let r_prime_G_precomputed = G.mul(*r);
+            let r_prime_H_precomputed = H.mul(*r);
+
+            let r_prime_G_precomputed_str = Self::to_hex(r_prime_G_precomputed);
+            let r_prime_H_precomputed_str = Self::to_hex(r_prime_H_precomputed);
+
+            prover.add_input(
+                "r_prime_G",
+                BigInt::from(r_prime_G_precomputed_str[0].clone()),
+            );
+            prover.add_input(
+                "r_prime_G",
+                BigInt::from(r_prime_G_precomputed_str[1].clone()),
+            );
+            prover.add_input(
+                "r_prime_H",
+                BigInt::from(r_prime_H_precomputed_str[0].clone()),
+            );
+            prover.add_input(
+                "r_prime_H",
+                BigInt::from(r_prime_H_precomputed_str[1].clone()),
+            );
+            prover.add_input("r_prime", r_str);
+        }
+
+        // Add permutation as input
+        for &perm in permutation.mapping.iter() {
+            prover.add_input("permutations", BigInt::from(perm));
+        }
+
+        let Ca_list = Ca
+            .iter()
+            .flat_map(|point| Self::to_hex(point.into_projective()).to_vec())
+            .collect::<Vec<BigUint>>();
+
+        let Cb_list = Cb
+            .iter()
+            .flat_map(|point| Self::to_hex(point.into_projective()).to_vec())
+            .collect::<Vec<BigUint>>();
+
+        prover.add_input("H", BigInt::from(H_str[0].clone()));
+        prover.add_input("H", BigInt::from(H_str[1].clone()));
+        prover.add_input("G", BigInt::from(G_str[0].clone()));
+        prover.add_input("G", BigInt::from(G_str[1].clone()));
+
+        for ca in Ca_list {
+            prover.add_input("Ca", ca);
+        }
+        for cb in Cb_list {
+            prover.add_input("Cb", cb);
+        }
+
+        let (raw_inputs, proof) = prover
+            .generate_proof()
+            .map_err(|e| CardProtocolError::Other(format!("{}", e)))?;
+
+
+        let inputs: Vec<Fr> = raw_inputs
+            .into_iter()
+            .map(|x| Fr::from(BigUint::from(x)))
+            .collect();
+
+        Ok((inputs, proof))
+    }
+
+    #[allow(non_snake_case)]
+    fn verify_shuffle_remask2(
+        verifier: &mut CircomProver,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        previous_deck: &Vec<Self::MaskedCard>,
+        public: Vec<Fr>,
+        proof: Self::ZKProofGroth16,
+    ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>
+    where
+        C: ProjectiveCurve,
+        C::Affine: HasCoordinates + GeneratePoints<C>,
+    {
+        for card in previous_deck {
+            println!("card: {:?}", card.0.to_string());
+        }
+
+        let mut deck_sorted = previous_deck.clone();
+        deck_sorted.sort_by_key(|card| card.1.to_string());
+
+        let verified = verifier
+            .verify_proof(&public, &proof)
+            .map_err(|e| CardProtocolError::Other(format!("{}", e)))?;
+
+        if verified {
+            let Ca_out = &public[0..104];
+            let Cb_out = &public[104..208];
+
+            let H = &public[208..210];
+            let G = &public[210..212];
+            let Ca = &public[212..316];
+            let Cb = &public[316..420];
+
+            // Verificar que H coincide con shared_key
+            let shared_key_coords = Self::to_hex(shared_key.into_projective());
+            let h_input_x = BigUint::from(H[0]);
+            let h_input_y = BigUint::from(H[1]);
+
+            if shared_key_coords[0] != h_input_x || shared_key_coords[1] != h_input_y {
+                return Err(CardProtocolError::Other(
+                    "Verificación fallida: H no coincide con shared_key".to_string(),
+                ));
+            }
+            // Verificar que G coincide con pp.enc_parameters.generator
+            let generator_coords = Self::to_hex(pp.enc_parameters.generator.into_projective());
+            let g_input_x = BigUint::from(G[0]);
+            let g_input_y = BigUint::from(G[1]);
+
+            if generator_coords[0] != g_input_x || generator_coords[1] != g_input_y {
+                return Err(CardProtocolError::Other(
+                    "Verificación fallida: G no coincide con pp.enc_parameters.generator"
+                        .to_string(),
+                ));
+            }
+
+            // Separa original_deck en componentes Ca y Cb
+            let (original_Ca, original_Cb): (Vec<_>, Vec<_>) = deck_sorted
+                .iter()
+                .map(|masked_card| {
+                    let c1 = masked_card.0; // Ca component
+                    let c2 = masked_card.1; // Cb component
+                    (c1, c2)
+                })
+                .unzip();
+
+            // checks Ca and Cb
+            for i in 0..52 {
+                let original_ca_point = original_Ca[i];
+                let original_cb_point = original_Cb[i];
+
+                let original_ca_coords = Self::to_hex(original_ca_point.into_projective());
+                let original_cb_coords = Self::to_hex(original_cb_point.into_projective());
+
+                let ca_input_x = BigUint::from(Ca[i * 2]);
+                let ca_input_y = BigUint::from(Ca[i * 2 + 1]);
+                let cb_input_x = BigUint::from(Cb[i * 2]);
+                let cb_input_y = BigUint::from(Cb[i * 2 + 1]);
+
+                if original_ca_coords[0] != ca_input_x
+                    || original_ca_coords[1] != ca_input_y
+                    || original_cb_coords[0] != cb_input_x
+                    || original_cb_coords[1] != cb_input_y
+                {
+                    return Err(CardProtocolError::Other(format!(
+                        "Verificación fallida: Los componentes Ca y Cb no coinciden con los originales en la posición {}", i
+                    )));
+                }
+            }
+
+            let mut masked_cards: Vec<Self::MaskedCard> = Vec::with_capacity(52);
+
+            for i in 0..52 {
+                let cax = Ca_out[i * 2];
+                let cay = Ca_out[i * 2 + 1];
+                let cbx = Cb_out[i * 2];
+                let cby = Cb_out[i * 2 + 1];
+
+                let cax = Fq::from(BigUint::from(cax));
+                let cay = Fq::from(BigUint::from(cay));
+                let cbx = Fq::from(BigUint::from(cbx));
+                let cby = Fq::from(BigUint::from(cby));
+
+                let ca = C::Affine::new(cax, cay);
+                let cb = C::Affine::new(cbx, cby);
+
+                let masked_card = el_gamal::Ciphertext(ca, cb);
+                masked_cards.push(masked_card);
+            }
+
+            println!("Verification successful!!!");
+            // println!("Reshuffled deck: {:?}", masked_cards);
+
+            Ok(masked_cards)
+        } else {
+            Err(CardProtocolError::Other("Verification failed".to_string()))
+        }
+    }
+
     fn parse_and_convert_to_decimal(input: &str) -> BigUint {
         // Extraer el número hexadecimal entre paréntesis usando expresiones regulares
         let re = regex::Regex::new(r"\(([0-9A-Fa-f]+)\)").unwrap();
@@ -574,7 +785,7 @@ where
         sk: &Self::PlayerSecretKey,
         pk: &Self::PlayerPublicKey,
         m_list: &Vec<Self::Card>,
-    ) -> Result<(Vec<Fr>, Self::ZKProofCardRemoval), CardProtocolError> {
+    ) -> Result<(Vec<Fr>, Self::ZKProofGroth16), CardProtocolError> {
         if player_cards.iter().any(|card| card.is_none()) {
             return Err(CardProtocolError::Other(
                 "Player cards cannot be None".to_string(),
@@ -722,13 +933,12 @@ where
         pk: &Self::PlayerPublicKey,
         m_list: &Vec<Self::Card>,
         public: Vec<Fr>,
-        proof: Self::ZKProofCardRemoval,
+        proof: Self::ZKProofGroth16,
     ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>
     where
         C: ProjectiveCurve,
         C::Affine: HasCoordinates + GeneratePoints<C>,
     {
-
         for card in previous_deck {
             println!("card: {:?}", card.0.to_string());
         }
@@ -768,13 +978,13 @@ where
             let pk_computed_y = BigUint::from(pk_computed[1]);
             let pk_input_x = BigUint::from(pk_input[0]);
             let pk_input_y = BigUint::from(pk_input[1]);
-            
+
             if pk_computed_x != pk_input_x || pk_computed_y != pk_input_y {
                 return Err(CardProtocolError::Other(
                     "Verificación fallida: La clave pública calculada no coincide con la clave pública de entrada".to_string(),
                 ));
             }
-            
+
             // También verificar que pk_input coincide con la clave pública proporcionada
             let pk_coords = Self::to_hex(pk.into_projective());
             if pk_coords[0] != pk_input_x || pk_coords[1] != pk_input_y {
@@ -791,7 +1001,8 @@ where
 
             if player_cards.len() != 2 {
                 return Err(CardProtocolError::Other(
-                    "Verificación fallida: Se esperaban exactamente 2 cartas de jugador".to_string(),
+                    "Verificación fallida: Se esperaban exactamente 2 cartas de jugador"
+                        .to_string(),
                 ));
             }
 
@@ -802,20 +1013,23 @@ where
             let ca1_input_y = BigUint::from(Ca1_player[1]);
             let cb1_input_x = BigUint::from(Cb1_player[0]);
             let cb1_input_y = BigUint::from(Cb1_player[1]);
-            
-            if player_card1_ca_coords[0] != ca1_input_x || player_card1_ca_coords[1] != ca1_input_y ||
-            player_card1_cb_coords[0] != cb1_input_x || player_card1_cb_coords[1] != cb1_input_y {
-                   println!("player_card1_ca_coords: {:?}", player_card1_ca_coords);
-                   println!("player_card1_cb_coords: {:?}", player_card1_cb_coords);
-                   println!("ca1_input_x: {:?}", ca1_input_x);
-                   println!("ca1_input_y: {:?}", ca1_input_y);
-                   println!("cb1_input_x: {:?}", cb1_input_x);
-                   println!("cb1_input_y: {:?}", cb1_input_y);
+
+            if player_card1_ca_coords[0] != ca1_input_x
+                || player_card1_ca_coords[1] != ca1_input_y
+                || player_card1_cb_coords[0] != cb1_input_x
+                || player_card1_cb_coords[1] != cb1_input_y
+            {
+                println!("player_card1_ca_coords: {:?}", player_card1_ca_coords);
+                println!("player_card1_cb_coords: {:?}", player_card1_cb_coords);
+                println!("ca1_input_x: {:?}", ca1_input_x);
+                println!("ca1_input_y: {:?}", ca1_input_y);
+                println!("cb1_input_x: {:?}", cb1_input_x);
+                println!("cb1_input_y: {:?}", cb1_input_y);
                 return Err(CardProtocolError::Other(
                     "Verificación fallida: La primera carta del jugador no coincide con los datos del circuito".to_string(),
                 ));
             }
-            
+
             // Verificar segunda carta del jugador
             let player_card2_ca_coords = Self::to_hex(player_cards[1].0.into_projective());
             let player_card2_cb_coords = Self::to_hex(player_cards[1].1.into_projective());
@@ -823,9 +1037,12 @@ where
             let ca2_input_y = BigUint::from(Ca2_player[1]);
             let cb2_input_x = BigUint::from(Cb2_player[0]);
             let cb2_input_y = BigUint::from(Cb2_player[1]);
-            
-            if player_card2_ca_coords[0] != ca2_input_x || player_card2_ca_coords[1] != ca2_input_y ||
-               player_card2_cb_coords[0] != cb2_input_x || player_card2_cb_coords[1] != cb2_input_y {
+
+            if player_card2_ca_coords[0] != ca2_input_x
+                || player_card2_ca_coords[1] != ca2_input_y
+                || player_card2_cb_coords[0] != cb2_input_x
+                || player_card2_cb_coords[1] != cb2_input_y
+            {
                 println!("player_card2_ca_coords: {:?}", player_card2_ca_coords);
                 println!("player_card2_cb_coords: {:?}", player_card2_cb_coords);
                 println!("ca2_input_x: {:?}", ca2_input_x);

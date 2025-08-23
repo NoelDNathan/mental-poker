@@ -74,7 +74,7 @@ pub trait BarnettSmartProtocol {
     type ZKProofRemasking: CanonicalDeserialize + CanonicalSerialize;
     type ZKProofReveal: CanonicalDeserialize + CanonicalSerialize;
     type ZKProofShuffle: CanonicalDeserialize + CanonicalSerialize;
-    type ZKProofCardRemoval;
+    type ZKProofGroth16;
 
     /// Randomly produce the scheme parameters
     fn setup<R: Rng>(
@@ -213,6 +213,25 @@ pub trait BarnettSmartProtocol {
         proof: &Self::ZKProofShuffle,
     ) -> Result<(), CryptoError>;
 
+    fn shuffle_and_remask2(
+        prover: &mut CircomProver,
+        permutation: &Permutation,
+        r_prime: &mut Vec<Self::Scalar>,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        deck: &Vec<Self::MaskedCard>,
+    ) -> Result<(Vec<Fr>, Self::ZKProofGroth16), CardProtocolError>;
+
+    fn verify_shuffle_remask2(
+        prover: &mut CircomProver,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        original_deck: &Vec<Self::MaskedCard>,
+        public: Vec<Fr>,
+        proof: Self::ZKProofGroth16,
+    ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>;
+
+
     fn parse_and_convert_to_decimal(input: &str) -> BigUint;
 
     fn to_hex(point: Self::Point) -> [BigUint; 2];
@@ -227,7 +246,7 @@ pub trait BarnettSmartProtocol {
         sk: &Self::PlayerSecretKey,
         pk: &Self::PlayerPublicKey,
         m_list: &Vec<Self::Card>,
-    ) -> Result<(Vec<Fr>, Self::ZKProofCardRemoval), CardProtocolError>;
+    ) -> Result<(Vec<Fr>, Self::ZKProofGroth16), CardProtocolError>;
 
     fn verify_reshuffle_remask(
         prover: &mut CircomProver,
@@ -238,6 +257,6 @@ pub trait BarnettSmartProtocol {
         pk: &Self::PlayerPublicKey,
         m_list: &Vec<Self::Card>,
         public: Vec<Fr>,
-        proof: Self::ZKProofCardRemoval,
+        proof: Self::ZKProofGroth16,
     ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>;
 }

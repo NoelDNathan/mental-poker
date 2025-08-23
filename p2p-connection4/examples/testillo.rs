@@ -68,7 +68,6 @@ pub enum ProtocolMessage {
     RevealAllCards(Vec<Vec<u8>>),
     Ping(Vec<u8>),
     Pong(Vec<u8>),
-    ZKProofRemoveAndRemask(Vec<u8>, Vec<u8>),
     ZKProofRemoveAndRemaskChunk(u8, u8, Vec<u8>),
     ZKProofRemoveAndRemaskProof(Vec<u8>),
 }
@@ -986,7 +985,7 @@ pub fn serialize_canonical<T: CanonicalSerialize>(data: &T) -> Result<Vec<u8>, B
     Ok(buffer)
 }
 
-fn deserialize_remask_chunks(chunks: &[(u8, Vec<u8>)]) -> Result<Vec<String>, Box<dyn Error>> {
+fn deserialize_chunks(chunks: &[(u8, Vec<u8>)]) -> Result<Vec<String>, Box<dyn Error>> {
     // Crear una copia mutable del vector para ordenarlo
     let mut sorted_chunks = chunks.to_vec();
     sorted_chunks.sort_by_key(|(i, _)| *i);
@@ -1208,7 +1207,7 @@ pub fn verify_remask_for_reshuffle(
     player_cards: &Vec<MaskedCard>,
     pk: &PublicKey,
 ) -> Result<Vec<MaskedCard>, Box<dyn Error>> {
-    let public_strings = deserialize_remask_chunks(public_bytes)?;
+    let public_strings = deserialize_chunks(public_bytes)?;
     println!("verify_remask_for_reshuffle");
 
     let public_cards_1 = player_cards[0].clone();

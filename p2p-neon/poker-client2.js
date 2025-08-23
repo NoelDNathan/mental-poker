@@ -11,18 +11,88 @@ console.log("player_id", player_id);
 let community_cards = [null, null, null, null, null];
 let private_cards = [null, null];
 
+function verifyPublicKey(public_key, r, s) {
+  console.log("Javascript: Verify public key");
+  console.log("JS Public key:", public_key);
+  console.log("JS Proof:", r, s);
+  console.log("................. end javascript ......................");
+}
+
+function verifyShuffling(public, proof) {
+    console.log("Javascript: Shuffling");
+    // console.log("JS Public info:", public);
+    // console.log("JS Proof:", proof);
+    console.log("................. end javascript ......................");
+}
+
+
+// @param G Base point G
+// @param H Base point H
+// @param S0 S0 = xG
+// @param S1 S1 = xH
+// @param A Commitment A = rP
+// @param B Commitment B = rR
+// @param r Response r
+
+// G_card1.upcast::<JsValue>(),
+// G_card2.upcast::<JsValue>(),
+// H.upcast::<JsValue>(),
+// statement1_card1.upcast::<JsValue>(),
+// statement1_card2.upcast::<JsValue>(),
+// statement2.upcast::<JsValue>(),
+// A_card1.upcast::<JsValue>(),
+// B_card1.upcast::<JsValue>(),
+// r_card1.upcast::<JsValue>(),
+// A_card2.upcast::<JsValue>(),
+// B_card2.upcast::<JsValue>(),
+// r_card2.upcast::<JsValue>(),
+
+function verifyRevealToken(
+  G_card1, 
+  G_card2, 
+  H, 
+  statement1_card1, 
+  statement1_card2, 
+  statement2, 
+  A_card1, 
+  B_card1, 
+  A_card2, 
+  B_card2, 
+  r_card1, 
+  r_card2){
+  console.log("Javascript: Verifing Token");
+  // console.log("G", G)
+  // console.log("H", H)
+  // console.log("xG", xG)
+  // console.log("xH", xH)
+  // console.log("A", A)
+  // console.log("B", B)
+  // console.log("r", r)
+}
+
 function revealCommunityCard(pos, card) {
+  console.log("Javascript: Reveal community card");
   community_cards[pos] = card;
   console.log(`JS → Community[${pos}] = ${card}`);
+  console.log("................. end javascript ......................");
 }
 
 function revealPrivateCard(pos, card) {
+  console.log("Javascript: Reveal private card");
   private_cards[pos] = card;
   console.log(`JS → Private[${pos}]   = ${card}`);
+  console.log("................. end javascript ......................");
 }
 
 // Arrancamos la tarea Rust
-poker_client_async(player_id, revealCommunityCard, revealPrivateCard);
+poker_client_async(
+  player_id,
+  verifyPublicKey,
+  verifyShuffling,
+  verifyRevealToken,
+  revealCommunityCard,
+  revealPrivateCard
+);
 
 console.log(
   "Presiona:\n" +
