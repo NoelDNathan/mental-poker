@@ -29,5 +29,6 @@ ark-ec = "0.3.0"
 proof-essentials = { path = "../proof-essentials" }
 zk-reshuffle = { path = "../zk-reshuffle" }
 once_cell = "1.17"  
-
+num-bigint = "0.4"
+regex = "1.0"
 

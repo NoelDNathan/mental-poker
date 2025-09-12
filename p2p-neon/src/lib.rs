@@ -15,11 +15,13 @@ use libp2p::{
     tcp, yamux,
 };
 use neon::prelude::*;
+use num_bigint::BigUint;
 use proof_essentials::utils::permutation::Permutation;
 use proof_essentials::utils::rand::sample_vector;
 use rand::thread_rng;
 use rand::Rng;
 use rand::SeedableRng;
+use regex::Regex;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::{
@@ -54,6 +56,62 @@ use std::{env, thread};
 
 use barnett_smart_card_protocol::error::CardProtocolError;
 use zk_reshuffle::{deserialize_proof, serialize_proof, CircomProver, Proof as ZKProofCardRemoval};
+
+// Add new structures for JSON generation
+#[derive(Debug, Serialize)]
+struct Point {
+    x: String,
+    y: String,
+}
+
+#[derive(Debug, Serialize)]
+struct SchnorrProof {
+    commitment: Point,
+    response: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ChaumPedersenProof {
+    A: Point,
+    B: Point,
+    r: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ZKProof {
+    proofA: Vec<String>,
+    proofB: Vec<Vec<String>>,
+    proofC: Vec<String>,
+    pubSignals: String,
+}
+
+#[derive(Debug, Serialize)]
+struct Tokens {
+    player1ToPlayer2: PlayerCards,
+    player2ToPlayer1: PlayerCards,
+    communityCardsFromPlayer1: Vec<Point>,
+    communityCardsFromPlayer2: Vec<Point>,
+}
+
+#[derive(Debug, Serialize)]
+struct PlayerCards {
+    card1: Point,
+    card2: Point,
+}
+
+#[derive(Debug, Serialize)]
+struct PokerCryptographyJSON {
+    description: String,
+    publicKeys: HashMap<String, Point>,
+    schnorrProofs: HashMap<String, SchnorrProof>,
+    chaumPedersenProofs: HashMap<String, ChaumPedersenProof>,
+    zkProofs: HashMap<String, ZKProof>,
+    cardMappings: String,
+    encryptedCards: String,
+    tokens: Tokens,
+    generator: Point,
+    encGenerator: Point,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PublicKeyInfoEncoded {
@@ -484,6 +542,33 @@ async fn poker_client(
                                 println!("No se puede revelar la carta: deck aún no está inicializada");
                             }
                         }
+                        "generate_json" => {
+                            println!("(Rust) >> Generating cryptography JSON...");
+                            match generate_cryptography_json(
+                                &connected_peers,
+                                &player,
+                                &pp,
+                                &deck,
+                                &card_mapping,
+                                &community_cards_tokens,
+                                &public_shuffle_bytes,
+                                &proof_shuffle_bytes,
+                                &public_reshuffle_bytes,
+                                &proof_reshuffle_bytes,
+                            ) {
+                                Ok(json) => {
+                                    let filename = format!("poker_cryptography_{}.json", player_id);
+                                    if let Err(e) = save_cryptography_json(&json, &filename) {
+                                        println!("Error saving JSON: {:?}", e);
+                                    } else {
+                                        println!("Cryptography JSON generated and saved successfully!");
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("Error generating JSON: {:?}", e);
+                                }
+                            }
+                        }
                         other => eprintln!("Comando desconocido: {}", other),
                     }
                 }
@@ -736,26 +821,46 @@ async fn poker_client(
                                                     player_info.reveal_tokens[0].push(reveal_token1);
                                                     player_info.reveal_tokens[1].push(reveal_token2);
 
-                                                    if player_info.reveal_tokens[0].len() == num_players_expected -1{
+                                                                                            if player_info.reveal_tokens[0].len() == num_players_expected -1{
 
-                                                        println!("Todos los tokens recibidos para el jugador {}", player_info.id);
+                                            println!("Todos los tokens recibidos para el jugador {}", player_info.id);
 
-                                                        let card1 = player_info.cards[0];
-                                                        let card2 = player_info.cards[1];
-                                                        if let (Some(card1), Some(card2)) = (card1, card2) {
+                                            let card1 = player_info.cards[0];
+                                            let card2 = player_info.cards[1];
+                                            if let (Some(card1), Some(card2)) = (card1, card2) {
 
-                                                            match CardProtocol::partial_unmask(&pp, &player_info.reveal_tokens[0], &card1) {
-                                                                Ok(opened_card1) => player_info.cards_public[0] = Some(opened_card1),
-                                                                Err(e) => println!("Error al revelar la carta 1: {:?}", e)
-                                                            }
+                                                match CardProtocol::partial_unmask(&pp, &player_info.reveal_tokens[0], &card1) {
+                                                    Ok(opened_card1) => player_info.cards_public[0] = Some(opened_card1),
+                                                    Err(e) => println!("Error al revelar la carta 1: {:?}", e)
+                                                }
 
-                                                            match CardProtocol::partial_unmask(&pp, &player_info.reveal_tokens[1], &card2) {
-                                                                Ok(opened_card2) => player_info.cards_public[1] = Some(opened_card2),
-                                                                Err(e) => println!("Error al revelar la carta 2: {:?}", e)
-                                                            }
-                                                        }
+                                                match CardProtocol::partial_unmask(&pp, &player_info.reveal_tokens[1], &card2) {
+                                                    Ok(opened_card2) => player_info.cards_public[1] = Some(opened_card2),
+                                                    Err(e) => println!("Error al revelar la carta 2: {:?}", e)
+                                                }
+                                            }
 
-                                                    }
+                                            // Auto-generate JSON when all cards are revealed
+                                            if let Ok(json) = generate_cryptography_json(
+                                                &connected_peers,
+                                                &player,
+                                                &pp,
+                                                &deck,
+                                                &card_mapping,
+                                                &community_cards_tokens,
+                                                &public_shuffle_bytes,
+                                                &proof_shuffle_bytes,
+                                                &public_reshuffle_bytes,
+                                                &proof_reshuffle_bytes,
+                                            ) {
+                                                let filename = format!("poker_cryptography_auto_{}.json", player_id);
+                                                if let Err(e) = save_cryptography_json(&json, &filename) {
+                                                    println!("Error auto-saving JSON: {:?}", e);
+                                                } else {
+                                                    println!("Auto-generated cryptography JSON saved!");
+                                                }
+                                            }
+                                        }
                                                 }
                                             None => {
                                                 panic!("Error: No se encontró al jugador con id {}", current_reshuffler)
@@ -861,6 +966,27 @@ async fn poker_client(
                                                                         cb.to_inner(&mut cx).call(&mut cx, this, args)?;
                                                                         Ok(())
                                                                     });
+
+                                                                    // Auto-generate JSON after community card is revealed
+                                                                    if let Ok(json) = generate_cryptography_json(
+                                                                        &connected_peers,
+                                                                        &player,
+                                                                        &pp,
+                                                                        &Some(deck.clone()),
+                                                                        &Some(card_mapping.clone()),
+                                                                        &community_cards_tokens,
+                                                                        &public_shuffle_bytes,
+                                                                        &proof_shuffle_bytes,
+                                                                        &public_reshuffle_bytes,
+                                                                        &proof_reshuffle_bytes,
+                                                                    ) {
+                                                                        let filename = format!("poker_cryptography_community_{}_{}.json", player_id, index);
+                                                                        if let Err(e) = save_cryptography_json(&json, &filename) {
+                                                                            println!("Error auto-saving community card JSON: {:?}", e);
+                                                                        } else {
+                                                                            println!("Auto-generated community card cryptography JSON saved!");
+                                                                        }
+                                                                    }
 
                                                                 }
                                                                 Err(e) => println!("Error opening card: {:?}", e),
@@ -1776,6 +1902,34 @@ fn process_reshuffle_verification(
                                     if new_reshuffler == 2 {
                                         println!("All reshuffled");
 
+                                        // Auto-generate JSON after reshuffling is complete
+                                        if let Ok(json) = generate_cryptography_json(
+                                            connected_peers,
+                                            player,
+                                            pp,
+                                            &Some(final_deck.clone()),
+                                            &None, // card_mapping not available in this scope
+                                            &vec![vec![], vec![], vec![], vec![], vec![]], // Empty community cards for now
+                                            &vec![], // Empty shuffle bytes for now
+                                            &vec![], // Empty shuffle proof for now
+                                            public_reshuffle_bytes,
+                                            proof_reshuffle_bytes,
+                                        ) {
+                                            let filename = format!(
+                                                "poker_cryptography_reshuffle_{}.json",
+                                                player_id
+                                            );
+                                            if let Err(e) = save_cryptography_json(&json, &filename)
+                                            {
+                                                println!(
+                                                    "Error auto-saving reshuffle JSON: {:?}",
+                                                    e
+                                                );
+                                            } else {
+                                                println!("Auto-generated reshuffle cryptography JSON saved!");
+                                            }
+                                        }
+
                                         if is_dealer(current_dealer, player_id) {
                                             println!("Starting shuffling and remasking");
                                             let shuffled_deck = shuffle_remask_and_send(
@@ -1810,6 +1964,28 @@ fn process_reshuffle_verification(
                         println!("current_reshuffler: {:?}", new_reshuffler);
                         if new_reshuffler == 2 {
                             println!("All reshuffled");
+
+                            // Auto-generate JSON after reshuffling is complete
+                            if let Ok(json) = generate_cryptography_json(
+                                connected_peers,
+                                player,
+                                pp,
+                                &Some(reshuffled_deck.clone()),
+                                &None, // card_mapping not available in this scope
+                                &vec![vec![], vec![], vec![], vec![], vec![]], // Empty community cards for now
+                                &vec![], // Empty shuffle bytes for now
+                                &vec![], // Empty shuffle proof for now
+                                public_reshuffle_bytes,
+                                proof_reshuffle_bytes,
+                            ) {
+                                let filename =
+                                    format!("poker_cryptography_reshuffle_{}.json", player_id);
+                                if let Err(e) = save_cryptography_json(&json, &filename) {
+                                    println!("Error auto-saving reshuffle JSON: {:?}", e);
+                                } else {
+                                    println!("Auto-generated reshuffle cryptography JSON saved!");
+                                }
+                            }
 
                             if is_dealer(current_dealer, player_id) {
                                 println!("Starting shuffling and remasking");
@@ -1992,8 +2168,10 @@ fn process_shuffle_verification(
                                 let A_card2 = cx.string(format!("{:?}", proof2.a.to_string()));
                                 let B_card2 = cx.string(format!("{:?}", proof2.b.to_string()));
                                 let r_card2 = cx.string(format!("{:?}", proof2.r.to_string()));
+                                let receiver_chair = cx.string(format!("{:?}", i));
 
                                 let args1 = vec![
+                                    receiver_chair.upcast::<JsValue>(), // Receiver id
                                     G_card1.upcast::<JsValue>(),
                                     G_card2.upcast::<JsValue>(),
                                     H.upcast::<JsValue>(),
@@ -2056,6 +2234,27 @@ fn process_shuffle_verification(
                             println!("Error sending reveal token: {:?}", e);
                         }
                     }
+
+                    // Auto-generate JSON after shuffling is complete
+                    if let Ok(json) = generate_cryptography_json(
+                        connected_peers,
+                        &player,
+                        &pp,
+                        &Some(deck.clone()),
+                        &None, // card_mapping not available in this scope
+                        &vec![vec![], vec![], vec![], vec![], vec![]], // Empty community cards for now
+                        &public_shuffle_bytes,
+                        &proof_shuffle_bytes,
+                        &vec![], // Empty reshuffle bytes for now
+                        &vec![], // Empty reshuffle proof for now
+                    ) {
+                        let filename = format!("poker_cryptography_shuffle_{}.json", player_id);
+                        if let Err(e) = save_cryptography_json(&json, &filename) {
+                            println!("Error auto-saving shuffle JSON: {:?}", e);
+                        } else {
+                            println!("Auto-generated shuffle cryptography JSON saved!");
+                        }
+                    }
                 }
             }
             println!("Shuffle verified");
@@ -2083,4 +2282,393 @@ fn validate_chunks(chunks: &[(u8, Vec<u8>)], expected_length: u8) -> bool {
         }
     }
     true
+}
+
+// Add this helper function before the generate_cryptography_json function
+fn field_to_decimal(field_element: &str) -> String {
+    // Extract the hexadecimal part from the field element string
+    // Format: "Fp256 \"(0BB77A6AD63E739B4EACB2E09D6277C12AB8D8010534E0B62893F3F6BB957051)\""
+    let re = Regex::new(r"\(([0-9A-Fa-f]+)\)").unwrap();
+    if let Some(caps) = re.captures(field_element) {
+        let hex_str = caps.get(1).unwrap().as_str();
+        // Convert hexadecimal to decimal using parse_bytes
+        let decimal = BigUint::parse_bytes(hex_str.as_bytes(), 16).unwrap();
+        decimal.to_string()
+    } else {
+        // If no parentheses found, try to parse as direct hex
+        field_element
+            .trim_matches(|c| c == '"' || c == '\\')
+            .to_string()
+    }
+}
+
+fn generate_cryptography_json(
+    connected_peers: &HashMap<libp2p::PeerId, PlayerInfo>,
+    player: &InternalPlayer,
+    pp: &CardParameters,
+    deck: &Option<Vec<MaskedCard>>,
+    card_mapping: &Option<HashMap<Card, ClassicPlayingCard>>,
+    community_cards_tokens: &[Vec<(RevealToken, RevealProof, PublicKey)>],
+    public_shuffle_bytes: &[(u8, Vec<u8>)],
+    proof_shuffle_bytes: &[u8],
+    public_reshuffle_bytes: &[(u8, Vec<u8>)],
+    proof_reshuffle_bytes: &[u8],
+) -> Result<PokerCryptographyJSON, Box<dyn Error>> {
+    let mut public_keys = HashMap::new();
+    let mut schnorr_proofs = HashMap::new();
+    let mut chaum_pedersen_proofs = HashMap::new();
+    let mut zk_proofs = HashMap::new();
+
+    // Add current player
+    let player_id = format!("player{}", 1); // Assuming current player is player1
+    public_keys.insert(
+        player_id.clone(),
+        Point {
+            x: field_to_decimal(&player.pk.x.to_string()),
+            y: field_to_decimal(&player.pk.y.to_string()),
+        },
+    );
+
+    schnorr_proofs.insert(
+        player_id.clone(),
+        SchnorrProof {
+            commitment: Point {
+                x: field_to_decimal(&player.proof_key.random_commit.x.to_string()),
+                y: field_to_decimal(&player.proof_key.random_commit.y.to_string()),
+            },
+            response: field_to_decimal(&player.proof_key.opening.to_string()),
+        },
+    );
+
+    // Add connected peers
+    for (_, player_info) in connected_peers.iter() {
+        let peer_id = format!("player{}", player_info.id);
+        public_keys.insert(
+            peer_id.clone(),
+            Point {
+                x: field_to_decimal(&player_info.pk.x.to_string()),
+                y: field_to_decimal(&player_info.pk.y.to_string()),
+            },
+        );
+
+        schnorr_proofs.insert(
+            peer_id.clone(),
+            SchnorrProof {
+                commitment: Point {
+                    x: field_to_decimal(&player_info.proof_key.random_commit.x.to_string()),
+                    y: field_to_decimal(&player_info.proof_key.random_commit.y.to_string()),
+                },
+                response: field_to_decimal(&player_info.proof_key.opening.to_string()),
+            },
+        );
+
+        // Add Chaum-Pedersen proofs for player cards
+        if let (Some(card1), Some(card2)) = (player_info.cards[0], player_info.cards[1]) {
+            // For card1
+            if let Some(token) = player_info.reveal_tokens[0].first() {
+                chaum_pedersen_proofs.insert(
+                    format!("{}Card1", peer_id),
+                    ChaumPedersenProof {
+                        A: Point {
+                            x: field_to_decimal(&token.1.a.x.to_string()),
+                            y: field_to_decimal(&token.1.a.y.to_string()),
+                        },
+                        B: Point {
+                            x: field_to_decimal(&token.1.b.x.to_string()),
+                            y: field_to_decimal(&token.1.b.y.to_string()),
+                        },
+                        r: field_to_decimal(&token.1.r.to_string()),
+                    },
+                );
+            }
+
+            // For card2
+            if let Some(token) = player_info.reveal_tokens[1].first() {
+                chaum_pedersen_proofs.insert(
+                    format!("{}Card2", peer_id),
+                    ChaumPedersenProof {
+                        A: Point {
+                            x: field_to_decimal(&token.1.a.x.to_string()),
+                            y: field_to_decimal(&token.1.a.y.to_string()),
+                        },
+                        B: Point {
+                            x: field_to_decimal(&token.1.b.x.to_string()),
+                            y: field_to_decimal(&token.1.b.y.to_string()),
+                        },
+                        r: field_to_decimal(&token.1.r.to_string()),
+                    },
+                );
+            }
+        }
+    }
+
+    // Add current player's Chaum-Pedersen proofs
+    if let Some(deck) = deck {
+        let player_id_num = 1; // Assuming current player is player1
+        let card1_index = player_id_num * 2 + 5;
+        let card2_index = player_id_num * 2 + 1 + 5;
+
+        if card1_index < deck.len() && card2_index < deck.len() {
+            // Generate tokens for current player's cards
+            let rng = &mut thread_rng();
+            if let Ok((token1, proof1, _)) =
+                player.compute_reveal_token(rng, pp, &deck[card1_index])
+            {
+                chaum_pedersen_proofs.insert(
+                    "player1Card1".to_string(),
+                    ChaumPedersenProof {
+                        A: Point {
+                            x: field_to_decimal(&proof1.a.x.to_string()),
+                            y: field_to_decimal(&proof1.a.y.to_string()),
+                        },
+                        B: Point {
+                            x: field_to_decimal(&proof1.b.x.to_string()),
+                            y: field_to_decimal(&proof1.b.y.to_string()),
+                        },
+                        r: field_to_decimal(&proof1.r.to_string()),
+                    },
+                );
+            }
+
+            if let Ok((token2, proof2, _)) =
+                player.compute_reveal_token(rng, pp, &deck[card2_index])
+            {
+                chaum_pedersen_proofs.insert(
+                    "player1Card2".to_string(),
+                    ChaumPedersenProof {
+                        A: Point {
+                            x: field_to_decimal(&proof2.a.x.to_string()),
+                            y: field_to_decimal(&proof2.a.y.to_string()),
+                        },
+                        B: Point {
+                            x: field_to_decimal(&proof2.b.x.to_string()),
+                            y: field_to_decimal(&proof2.b.y.to_string()),
+                        },
+                        r: field_to_decimal(&proof2.r.to_string()),
+                    },
+                );
+            }
+        }
+    }
+
+    // Add community cards Chaum-Pedersen proofs
+    for (i, tokens) in community_cards_tokens.iter().enumerate() {
+        if !tokens.is_empty() {
+            let card_name = match i {
+                0 => "flop".to_string(),
+                1 => "flop".to_string(),
+                2 => "flop".to_string(),
+                3 => "turn".to_string(),
+                4 => "river".to_string(),
+                _ => continue,
+            };
+
+            if let Some(token) = tokens.first() {
+                let proof_name = if i < 3 {
+                    format!("{}[{}]", card_name, i)
+                } else {
+                    card_name
+                };
+
+                chaum_pedersen_proofs.insert(
+                    format!("communityCards.{}", proof_name),
+                    ChaumPedersenProof {
+                        A: Point {
+                            x: field_to_decimal(&token.1.a.x.to_string()),
+                            y: field_to_decimal(&token.1.a.y.to_string()),
+                        },
+                        B: Point {
+                            x: field_to_decimal(&token.1.b.x.to_string()),
+                            y: field_to_decimal(&token.1.b.y.to_string()),
+                        },
+                        r: field_to_decimal(&token.1.r.to_string()),
+                    },
+                );
+            }
+        }
+    }
+
+    // Add ZK proofs
+    if !public_shuffle_bytes.is_empty() && !proof_shuffle_bytes.is_empty() {
+        let public_strings = deserialize_chunks(public_shuffle_bytes)?;
+        let proof = deserialize_proof(proof_shuffle_bytes)?;
+
+        zk_proofs.insert(
+            "shuffling".to_string(),
+            ZKProof {
+                proofA: vec![proof.a.x.to_string(), proof.a.y.to_string()],
+                proofB: vec![
+                    vec![proof.b.x.c0.to_string(), proof.b.x.c1.to_string()],
+                    vec![proof.b.y.c0.to_string(), proof.b.y.c1.to_string()],
+                ],
+                proofC: vec![proof.c.x.to_string(), proof.c.y.to_string()],
+                pubSignals: format!("{}_ELEMENTS", public_strings.len()),
+            },
+        );
+    }
+
+    if !public_reshuffle_bytes.is_empty() && !proof_reshuffle_bytes.is_empty() {
+        let public_strings = deserialize_chunks(public_reshuffle_bytes)?;
+        let proof = deserialize_proof(proof_reshuffle_bytes)?;
+
+        zk_proofs.insert(
+            "reshuffling".to_string(),
+            ZKProof {
+                proofA: vec![proof.a.x.to_string(), proof.a.y.to_string()],
+                proofB: vec![
+                    vec![proof.b.x.c0.to_string(), proof.b.x.c1.to_string()],
+                    vec![proof.b.y.c0.to_string(), proof.b.y.c1.to_string()],
+                ],
+                proofC: vec![proof.c.x.to_string(), proof.c.y.to_string()],
+                pubSignals: format!("{}_ELEMENTS", public_strings.len()),
+            },
+        );
+    }
+
+    // Generate tokens structure
+    let mut player1_to_player2 = PlayerCards {
+        card1: Point {
+            x: "1111111111111111111111111111111111111111111111111111111111111111".to_string(),
+            y: "2222222222222222222222222222222222222222222222222222222222222222".to_string(),
+        },
+        card2: Point {
+            x: "3333333333333333333333333333333333333333333333333333333333333333".to_string(),
+            y: "4444444444444444444444444444444444444444444444444444444444444444".to_string(),
+        },
+    };
+
+    let mut player2_to_player1 = PlayerCards {
+        card1: Point {
+            x: "5555555555555555555555555555555555555555555555555555555555555555".to_string(),
+            y: "6666666666666666666666666666666666666666666666666666666666666666".to_string(),
+        },
+        card2: Point {
+            x: "7777777777777777777777777777777777777777777777777777777777777777".to_string(),
+            y: "8888888888888888888888888888888888888888888888888888888888888888".to_string(),
+        },
+    };
+
+    // Try to get real token values if available
+    if let Some(deck) = deck {
+        let rng = &mut thread_rng();
+
+        // Generate tokens for player1 to player2
+        if deck.len() > 6 {
+            if let Ok((token1, _, _)) = player.compute_reveal_token(rng, pp, &deck[6]) {
+                player1_to_player2.card1 = Point {
+                    x: field_to_decimal(&token1.0.x.to_string()),
+                    y: field_to_decimal(&token1.0.y.to_string()),
+                };
+            }
+            if let Ok((token2, _, _)) = player.compute_reveal_token(rng, pp, &deck[7]) {
+                player1_to_player2.card2 = Point {
+                    x: field_to_decimal(&token2.0.x.to_string()),
+                    y: field_to_decimal(&token2.0.y.to_string()),
+                };
+            }
+        }
+
+        // Generate tokens for player2 to player1
+        if deck.len() > 4 {
+            if let Ok((token1, _, _)) = player.compute_reveal_token(rng, pp, &deck[4]) {
+                player2_to_player1.card1 = Point {
+                    x: field_to_decimal(&token1.0.x.to_string()),
+                    y: field_to_decimal(&token1.0.y.to_string()),
+                };
+            }
+            if let Ok((token2, _, _)) = player.compute_reveal_token(rng, pp, &deck[5]) {
+                player2_to_player1.card2 = Point {
+                    x: field_to_decimal(&token2.0.x.to_string()),
+                    y: field_to_decimal(&token2.0.y.to_string()),
+                };
+            }
+        }
+    }
+
+    let tokens = Tokens {
+        player1ToPlayer2: player1_to_player2,
+        player2ToPlayer1: player2_to_player1,
+        communityCardsFromPlayer1: vec![
+            Point {
+                x: "9999999999999999999999999999999999999999999999999999999999999999".to_string(),
+                y: "1010101010101010101010101010101010101010101010101010101010101010".to_string(),
+            },
+            Point {
+                x: "1111111111111111111111111111111111111111111111111111111111111111".to_string(),
+                y: "1212121212121212121212121212121212121212121212121212121212121212".to_string(),
+            },
+            Point {
+                x: "1313131313131313131313131313131313131313131313131313131313131313".to_string(),
+                y: "1414141414141414141414141414141414141414141414141414141414141414".to_string(),
+            },
+            Point {
+                x: "1515151515151515151515151515151515151515151515151515151515151515".to_string(),
+                y: "1616161616161616161616161616161616161616161616161616161616161616".to_string(),
+            },
+            Point {
+                x: "1717171717171717171717171717171717171717171717171717171717171717".to_string(),
+                y: "1818181818181818181818181818181818181818181818181818181818181818".to_string(),
+            },
+        ],
+        communityCardsFromPlayer2: vec![
+            Point {
+                x: "1919191919191919191919191919191919191919191919191919191919191919".to_string(),
+                y: "2020202020202020202020202020202020202020202020202020202020202020".to_string(),
+            },
+            Point {
+                x: "2121212121212121212121212121212121212121212121212121212121212121".to_string(),
+                y: "2222222222222222222222222222222222222222222222222222222222222222".to_string(),
+            },
+            Point {
+                x: "2323232323232323232323232323232323232323232323232323232323232323".to_string(),
+                y: "2424242424242424242424242424242424242424242424242424242424242424".to_string(),
+            },
+            Point {
+                x: "2525252525252525252525252525252525252525252525252525252525252525".to_string(),
+                y: "2626262626262626262626262626262626262626262626262626262626262626".to_string(),
+            },
+            Point {
+                x: "2727272727272727272727272727272727272727272727272727272727272727".to_string(),
+                y: "2828282828282828282828282828282828282828282828282828282828282828".to_string(),
+            },
+        ],
+    };
+
+    let json = PokerCryptographyJSON {
+        description: "Mock cryptographic values for PokerCryptography tests. Replace with real values when available.".to_string(),
+        publicKeys: public_keys,
+        schnorrProofs: schnorr_proofs,
+        chaumPedersenProofs: chaum_pedersen_proofs,
+        zkProofs: zk_proofs,
+        cardMappings: "PLACEHOLDER_52_CARDS".to_string(),
+        encryptedCards: "PLACEHOLDER_52_ENCRYPTED_CARDS".to_string(),
+        tokens,
+        generator: Point {
+            x: field_to_decimal(&pp.generator.0.x.to_string()),
+            y: field_to_decimal(&pp.generator.0.y.to_string()),
+        },
+        encGenerator: Point {
+            x: field_to_decimal(&pp.enc_parameters.generator.x.to_string()),
+            y: field_to_decimal(&pp.enc_parameters.generator.y.to_string()),
+        },
+    };
+
+    Ok(json)
+}
+
+fn save_cryptography_json(
+    json: &PokerCryptographyJSON,
+    filename: &str,
+) -> Result<(), Box<dyn Error>> {
+    // Create cryptography-results directory if it doesn't exist
+    let crypto_dir = "cryptography-results";
+    std::fs::create_dir_all(crypto_dir)?;
+
+    // Construct full path
+    let full_path = format!("{}/{}", crypto_dir, filename);
+
+    let json_string = serde_json::to_string_pretty(json)?;
+    std::fs::write(&full_path, json_string)?;
+    println!("Cryptography JSON saved to {}", full_path);
+    Ok(())
 }

@@ -16,7 +16,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@neon-rs/cli": "0.1.82"
+    "@neon-rs/cli": "0.1.82",
+    "typescript": "^5.9.2"
   },
   "dependencies": {
     "ws": "^8.18.0"
