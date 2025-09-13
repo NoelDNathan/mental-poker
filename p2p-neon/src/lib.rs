@@ -34,6 +34,10 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::{io, io::AsyncBufReadExt, select, time::interval};
 use tracing_subscriber::EnvFilter;
 
+const ERROR_PLAYER_ID_NOT_SET: &str = "Player ID should be set";
+const ERROR_NAME_BYTES_NOT_SET: &str = "name_bytes should be set";
+const ERROR_PLAYER_NOT_SET: &str = "Player should be initialized";
+
 // We create a custom network behaviour that combines Gossipsub and Mdns.
 #[derive(NetworkBehaviour)]
 pub struct MyBehaviour {
@@ -162,7 +166,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
 #[allow(non_snake_case)]
 fn poker_client_async(mut cx: FunctionContext) -> JsResult<JsPromise> {
-    let player_id = cx.argument::<JsString>(0)?.value(&mut cx);
     let verify_public_key = cx.argument::<JsFunction>(1)?;
     let verify_shuffling = cx.argument::<JsFunction>(2)?;
     let verify_reveal_token = cx.argument::<JsFunction>(3)?;
@@ -190,7 +193,6 @@ fn poker_client_async(mut cx: FunctionContext) -> JsResult<JsPromise> {
             rt.block_on(async move {
                 poker_client(
                     channel,
-                    player_id,
                     verify_public_key,
                     verify_shuffling,
                     verify_reveal_token,
@@ -224,7 +226,6 @@ fn send_line(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 #[allow(non_snake_case)]
 async fn poker_client(
     channel: Channel,
-    player_id: String,
     verifyPublicKey: Root<JsFunction>,
     verifyShuffling: Root<JsFunction>,
     verifyRevealToken: Root<JsFunction>,
@@ -296,18 +297,12 @@ async fn poker_client(
     let pp = CardProtocol::setup(rng, generator(), m, n)?;
 
     let args: Vec<String> = env::args().collect();
-    // let player_id = args
-    //     .iter()
-    //     .position(|arg| arg == "--id")
-    //     .and_then(|index| args.get(index + 1))
-    //     .cloned()
-    //     .unwrap_or_else(|| "DefaultName".to_string());
 
-    let name = format!("Player {}", player_id);
-    let name_bytes = to_bytes![name.as_bytes()].unwrap();
+    let mut player_id: Option<String> = None;
+    let mut name: Option<String> = None; // Player address
+    let mut name_bytes: Option<Vec<u8>> = None;
 
-    let rng2 = &mut thread_rng();
-    let mut player = InternalPlayer::new(rng2, &pp, &name_bytes).unwrap();
+    let mut player: Option<InternalPlayer> = None;
 
     // Initializate poker game variables
     let mut pk_proof_info_array: Vec<(PublicKey, ProofKeyOwnership, Vec<u8>)> = Vec::new();
@@ -335,7 +330,6 @@ async fn poker_client(
         prover_reshuffle.builder.is_some()
     );
 
-    let mut first_message = true;
     let mut num_players_expected = 2;
     let mut current_dealer = 0;
     let mut players_connected = 1;
@@ -419,7 +413,18 @@ async fn poker_client(
                         players_connected -= 1;
                         peer_last_seen.remove(&peer_id);
                         is_reshuffling = true;
-                        match handle_disconnected_player(rng, &mut swarm, &topic, &mut prover_reshuffle, &pp, &mut deck, &mut card_mapping, &player_id, &player, &mut joint_pk, &connected_peers, current_dealer){
+                        match handle_disconnected_player(rng,
+                            &mut swarm,
+                            &topic,
+                            &mut prover_reshuffle,
+                            &pp,
+                            &mut deck,
+                            &mut card_mapping,
+                            player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET),
+                            &player.as_ref().expect(ERROR_PLAYER_NOT_SET),
+                            &mut joint_pk,
+                            &connected_peers,
+                            current_dealer){
                             Ok((reshuffled_deck, aggregate_key, current_reshuffler_val)) => {
                                 deck = Some(reshuffled_deck);
                                 joint_pk = Some(aggregate_key);
@@ -435,43 +440,70 @@ async fn poker_client(
                 }
             }
             Some(cmd) = rx.recv() => {
-                if first_message && cmd.as_str() != "exit" && cmd.as_str() != "q" {
-                    // 1) enviar public key info
-                    println!("(Rust) >> Enviando PublicKeyInfo");
 
-                    let _ = channel.send(move |mut cx| {
-                        let cb = verifyPublicKey.clone();
-                        let this = cx.undefined();
-
-                        let r = cx.string(format!("{:?}", player.proof_key.random_commit.to_string()));
-                        let s = cx.string(format!("{:?}", player.proof_key.opening.to_string()));
-
-                        let public_key_value = cx.string(format!("{:?}", player.pk.to_string()));
-                        let args = vec![public_key_value.upcast::<JsValue>(), r.upcast::<JsValue>(), s.upcast::<JsValue>()];
-                        cb.to_inner(&mut cx).call(&mut cx, this, args)?;
-                        Ok(())
-                    });
-
-
-                    let public_key_info = PublicKeyInfoEncoded {
-                        name: name_bytes.clone(),
-                        public_key: serialize_canonical(&player.pk).unwrap(),
-                        proof_key: serialize_canonical(&player.proof_key).unwrap(),
-                    };
-                    let message = ProtocolMessage::PublicKeyInfo(public_key_info);
-                    if let Err(e) = send_protocol_message(&mut swarm, &topic, &message) {
-                        println!("Error sending public key info: {:?}", e);
-                    }
-                    first_message = false;
-                } else {
                     match cmd.as_str() {
                         "exit" | "q" => {
                             println!("(Rust) >> Exit command received, terminating client");
                             break;
                         }
+
+                        "sendPublicKey" => {
+                            if let Some((command, player_address)) = cmd.split_once(' ') {
+                                if command == "sendPublicKey" {
+                                    name = Some(player_address.to_string());
+                                    name_bytes = Some(to_bytes![player_address.as_bytes()].unwrap());
+                                    let rng2 = &mut thread_rng();
+                                    let mut _player = InternalPlayer::new(rng2, &pp, &name_bytes.as_ref().expect(ERROR_NAME_BYTES_NOT_SET)).expect("Failed to create player");
+                                    player = Some(_player.clone());
+
+                                    // 1) enviar public key info
+                                    println!("(Rust) >> Enviando PublicKeyInfo");
+
+                                    let player_clone = player.as_ref().expect(ERROR_PLAYER_NOT_SET).clone();
+                                    let _ = channel.send(move |mut cx| {
+                                        let cb = verifyPublicKey.clone();
+                                        let this = cx.undefined();
+
+                                        let r = cx.string(format!("{:?}", player_clone.proof_key.random_commit.to_string()));
+                                        let s = cx.string(format!("{:?}", player_clone.proof_key.opening.to_string()));
+
+                                        let public_key_value = cx.string(format!("{:?}", player_clone.pk.to_string()));
+                                        let args = vec![public_key_value.upcast::<JsValue>(), r.upcast::<JsValue>(), s.upcast::<JsValue>()];
+                                        cb.to_inner(&mut cx).call(&mut cx, this, args)?;
+                                        Ok(())
+                                    });
+
+
+                                    let public_key_info = PublicKeyInfoEncoded {
+                                        name: name_bytes.as_ref().expect(ERROR_NAME_BYTES_NOT_SET).clone(),
+                                        public_key: serialize_canonical(&player.as_ref().expect(ERROR_PLAYER_NOT_SET).pk).unwrap(),
+                                        proof_key: serialize_canonical(&player.as_ref().expect(ERROR_PLAYER_NOT_SET).proof_key).unwrap(),
+                                    };
+                                    let message = ProtocolMessage::PublicKeyInfo(public_key_info);
+                                    if let Err(e) = send_protocol_message(&mut swarm, &topic, &message) {
+                                        println!("Error sending public key info: {:?}", e);
+                                    }
+
+
+
+                                }
+                            } else {
+                                println!("Error: setPlayerId requiere un argumento");
+                            }
+                        }
+                        "setPlayerId" => {
+                            if let Some((command, player_id_arg)) = cmd.split_once(' ') {
+                                if command == "setPlayerId" {
+                                    player_id = Some(player_id_arg.to_string());
+                                }
+                            } else {
+                                println!("Error: setPlayerId requiere un argumento");
+                            }
+                        }
                         "flop" => {
                             println!("(Rust) >> Flop!");
                             if let Some(current_deck) = &deck {
+                                let player = player.as_ref().expect(ERROR_PLAYER_NOT_SET);
                                 let reveal_token_flop1: (RevealToken, RevealProof, PublicKey) = player.compute_reveal_token(rng, &pp, &current_deck[0])?;
                                 let reveal_token_flop2: (RevealToken, RevealProof, PublicKey) = player.compute_reveal_token(rng, &pp, &current_deck[1])?;
                                 let reveal_token_flop3: (RevealToken, RevealProof, PublicKey) = player.compute_reveal_token(rng, &pp, &current_deck[2])?;
@@ -494,6 +526,7 @@ async fn poker_client(
                         "turn" => {
                             println!("(Rust) >> Turn!");
                             if let Some(current_deck) = &deck {
+                                let player = player.as_ref().expect(ERROR_PLAYER_NOT_SET);
                                 let reveal_token_turn: (RevealToken, RevealProof, PublicKey) = player.compute_reveal_token(rng, &pp, &current_deck[3])?;
 
                                 let reveal_token_turn_bytes = serialize_canonical(&reveal_token_turn)?;
@@ -511,6 +544,7 @@ async fn poker_client(
                         "river" => {
                             println!("(Rust) >> River!");
                             if let Some(current_deck) = &deck {
+                                let player = player.as_ref().expect(ERROR_PLAYER_NOT_SET);
                                 let reveal_token_river: (RevealToken, RevealProof, PublicKey) = player.compute_reveal_token(rng, &pp, &current_deck[4])?;
 
                                 let reveal_token_river_bytes = serialize_canonical(&reveal_token_river)?;
@@ -527,6 +561,7 @@ async fn poker_client(
                         }
                         "reveal_all_cards" => {
                             if let Some(current_deck) = &deck {
+                                let player = player.as_ref().expect(ERROR_PLAYER_NOT_SET);
                                 let mut reveal_all_cards_bytes = vec![];
                                 for card in current_deck {
                                     let reveal_token: (RevealToken, RevealProof, PublicKey) = player.compute_reveal_token(rng, &pp, &card)?;
@@ -544,6 +579,8 @@ async fn poker_client(
                         }
                         "generate_json" => {
                             println!("(Rust) >> Generating cryptography JSON...");
+                            let player = player.as_ref().expect(ERROR_PLAYER_NOT_SET);
+                            let player_id = player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET);
                             match generate_cryptography_json(
                                 &connected_peers,
                                 &player,
@@ -571,7 +608,7 @@ async fn poker_client(
                         }
                         other => eprintln!("Comando desconocido: {}", other),
                     }
-                }
+
             }
             event = swarm.select_next_some() => match event {
                 SwarmEvent::Behaviour(MyBehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
@@ -600,7 +637,17 @@ async fn poker_client(
                         peer_last_seen.remove(&peer_id);
                         is_reshuffling = true;
 
-                         match handle_disconnected_player(rng, &mut swarm, &topic, &mut prover_reshuffle, &pp, &mut deck, &mut card_mapping, &player_id, &player, &mut joint_pk, &connected_peers, current_dealer){
+                         match handle_disconnected_player(rng,
+                            &mut swarm, &topic,
+                            &mut prover_reshuffle,
+                            &pp,
+                            &mut deck,
+                            &mut card_mapping,
+                            &player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET),
+                            &player.as_ref().expect(ERROR_PLAYER_NOT_SET),
+                            &mut joint_pk,
+                            &connected_peers,
+                            current_dealer){
                             Ok((reshuffled_deck, aggregate_key, current_reshuffler_val)) => {
                                 deck = Some(reshuffled_deck);
                                 joint_pk = Some(aggregate_key);
@@ -670,6 +717,8 @@ async fn poker_client(
                                         }
 
                                         if players_connected == num_players_expected {
+                                            let player = player.as_ref().expect(ERROR_PLAYER_NOT_SET);
+                                            let player_id = player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET);
 
                                             pk_proof_info_array.push((player.pk, player.proof_key, player.name.clone()));
                                             match CardProtocol::compute_aggregate_key(&pp, &pk_proof_info_array) {
@@ -729,7 +778,7 @@ async fn poker_client(
 
                                                 current_shuffler += 1;
 
-                                                if current_shuffler == player_id.parse::<usize>().unwrap(){
+                                                if current_shuffler == player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET).parse::<usize>().unwrap(){
                                                     let shuffle_deck = shuffle_remask_and_send(&mut swarm, &topic, &mut prover_shuffle, &pp, &joint_pk.as_ref().unwrap(), rng, &remasked_cards, m, n, Some(&channel), Some(&verifyShuffling) ).unwrap();
                                                     deck = Some(shuffle_deck);
                                                 }
@@ -741,8 +790,9 @@ async fn poker_client(
                                                     } else {
                                                         current_shuffler = 0;
                                                         println!("All players shuffled, revealing cards");
-                                                        let id = player_id.parse::<u8>().unwrap();
+                                                        let id = player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET).parse::<u8>().unwrap();
                                                         if let Some(deck) = &deck {
+                                                            let player = player.as_mut().expect(ERROR_PLAYER_NOT_SET);
                                                             player.receive_card(deck[id as usize * 2 + 5]);
                                                             player.receive_card(deck[id as usize * 2 + 1 + 5]);
                                                             for i in 0..num_players_expected{
@@ -810,7 +860,7 @@ async fn poker_client(
 
                                 }
                                 ProtocolMessage::RevealToken(id, reveal_token1_bytes, reveal_token2_bytes) => {
-                                    if id != player_id.parse::<u8>().unwrap(){
+                                    if id != player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET).parse::<u8>().unwrap(){
                                         let reveal_token1 = deserialize_canonical::<(RevealToken, RevealProof, PublicKey)>(&reveal_token1_bytes)?;
                                         let reveal_token2 = deserialize_canonical::<(RevealToken, RevealProof, PublicKey)>(&reveal_token2_bytes)?;
 
@@ -843,7 +893,7 @@ async fn poker_client(
                                             // Auto-generate JSON when all cards are revealed
                                             if let Ok(json) = generate_cryptography_json(
                                                 &connected_peers,
-                                                &player,
+                                                &player.as_ref().expect(ERROR_PLAYER_NOT_SET),
                                                 &pp,
                                                 &deck,
                                                 &card_mapping,
@@ -853,7 +903,7 @@ async fn poker_client(
                                                 &public_reshuffle_bytes,
                                                 &proof_reshuffle_bytes,
                                             ) {
-                                                let filename = format!("poker_cryptography_auto_{}.json", player_id);
+                                                let filename = format!("poker_cryptography_auto_{}.json", player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET));
                                                 if let Err(e) = save_cryptography_json(&json, &filename) {
                                                     println!("Error auto-saving JSON: {:?}", e);
                                                 } else {
@@ -880,49 +930,45 @@ async fn poker_client(
 
                                     if num_received_reveal_tokens == num_players_expected - 1 {
                                         println!("All tokens received, revealing cards");
-                                        let index1 = player_id.parse::<usize>().unwrap() * 2 + 5;
-                                        let index2 = player_id.parse::<usize>().unwrap() * 2 + 1 + 5;
+                                        let player_id = player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET).parse::<usize>().unwrap();
+                                        let index1 = player_id * 2 + 5;
+                                        let index2 = player_id * 2 + 1 + 5;
 
                                         if let Some(card_mapping) = &card_mapping {
                                             if let Some(deck) = &deck {
+                                                // Peek at both cards first
+                                                let player = player.as_mut().expect(ERROR_PLAYER_NOT_SET);
+                                                let card1_result = player.peek_at_card(&pp, &mut received_reveal_tokens1, &card_mapping, &deck[index1 as usize]);
+                                                let card2_result = player.peek_at_card(&pp, &mut received_reveal_tokens2, &card_mapping, &deck[index2 as usize]);
 
-                                                match player.peek_at_card(&pp, &mut received_reveal_tokens1, &card_mapping, &deck[index1 as usize]) {
-                                                    Ok(card1) => {
-                                                        println!("Card 1: {:?}", player.opened_cards);
-                                                        let setPrivateCards_clone1 = Arc::clone(&setPrivateCards);
-                                                        let _ = channel.send(move |mut cx| {
-                                                            let cb = setPrivateCards_clone1.clone();
-                                                            let this = cx.undefined();
-                                                            let index_value = cx.string(format!("{:?}", 0));
-                                                            let card_value = cx.string(format!("{:?}", card1));
-                                                            let args = vec![index_value.upcast::<JsValue>(), card_value.upcast::<JsValue>()];
-                                                            cb.to_inner(&mut cx).call(&mut cx, this, args)?;
-                                                            Ok(())
-                                                        });
-                                                    },
-                                                    Err(e) => println!("Error peeking at card 1: {:?}", e),
-                                                }
+                                                // Check if both cards were successfully peeked
+                                                match (card1_result, card2_result) {
+                                                    (Ok(card1), Ok(card2)) => {
+                                                        println!("Card 1: {:?}", card1);
+                                                        println!("Card 2: {:?}", card2);
+                                                        println!("Both cards revealed successfully");
 
-                                                    match player.peek_at_card(&pp, &mut received_reveal_tokens2, &card_mapping, &deck[index2 as usize]) {
-                                                    Ok(card2) => {
-                                                        println!("Card 2: {:?}", player.opened_cards);
                                                         let setPrivateCards_clone = Arc::clone(&setPrivateCards);
-                                                        println!("start communication");
                                                         let _ = channel.send(move |mut cx| {
                                                             let cb = setPrivateCards_clone.clone();
                                                             let this = cx.undefined();
-                                                            let index_value = cx.string(format!("{:?}", 1));
-                                                            let card_value = cx.string(format!("{:?}", card2));
-                                                            let args = vec![index_value.upcast::<JsValue>(), card_value.upcast::<JsValue>()];
+
+                                                            // Create an array with both cards
+                                                            let cards_array = cx.empty_array();
+                                                            let card1_value = cx.string(format!("{:?}", card1));
+                                                            let card2_value = cx.string(format!("{:?}", card2));
+                                                            cards_array.set(&mut cx, 0, card1_value)?;
+                                                            cards_array.set(&mut cx, 1, card2_value)?;
+
+                                                            let args = vec![cards_array.upcast::<JsValue>()];
                                                             cb.to_inner(&mut cx).call(&mut cx, this, args)?;
                                                             Ok(())
                                                         });
-
-                                                        println!("end communication");
                                                     },
-                                                    Err(e) => println!("Error peeking at card 2: {:?}", e),
+                                                    (Err(e1), Ok(_)) => println!("Error peeking at card 1: {:?}", e1),
+                                                    (Ok(_), Err(e2)) => println!("Error peeking at card 2: {:?}", e2),
+                                                    (Err(e1), Err(e2)) => println!("Error peeking at both cards: {:?}, {:?}", e1, e2),
                                                 }
-
                                             }
                                             else {
                                                 println!("No se puede revelar la carta: deck aún no está inicializada");
@@ -948,7 +994,7 @@ async fn poker_client(
                                             println!("All tokens received, revealing cards");
                                             if let Some(card_mapping) = &card_mapping {
                                                 if let Some(deck) = &deck {
-
+                                                    let player = player.as_ref().expect(ERROR_PLAYER_NOT_SET);
                                                     match player.compute_reveal_token(rng, &pp, &deck[index]) {
                                                         Ok(token) => {
                                                             community_cards_tokens[index].push(token);
@@ -980,7 +1026,7 @@ async fn poker_client(
                                                                         &public_reshuffle_bytes,
                                                                         &proof_reshuffle_bytes,
                                                                     ) {
-                                                                        let filename = format!("poker_cryptography_community_{}_{}.json", player_id, index);
+                                                                        let filename = format!("poker_cryptography_community_{}_{}.json", player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET), index);
                                                                         if let Err(e) = save_cryptography_json(&json, &filename) {
                                                                             println!("Error auto-saving community card JSON: {:?}", e);
                                                                         } else {
@@ -1011,6 +1057,7 @@ async fn poker_client(
 
                                     if let Some(deck) = &deck {
                                         if let Some(card_mapping) = &card_mapping {
+                                            let player = player.as_ref().expect(ERROR_PLAYER_NOT_SET);
                                             for i in 0..reveal_all_cards_bytes.len() {
                                                 let reveal_token = deserialize_canonical::<(RevealToken, RevealProof, PublicKey)>(&reveal_all_cards_bytes[i])?;
                                                 let player_token = player.compute_reveal_token(rng, &pp, &deck[i as usize])?;
@@ -1050,8 +1097,8 @@ async fn poker_client(
                                                 &proof_reshuffle_bytes,
                                                 joint_pk.as_ref().unwrap(),
                                                 deck.as_ref().unwrap(),
-                                                &player,
-                                                &player_id,
+                                                &player.as_ref().expect(ERROR_PLAYER_NOT_SET),
+                                                &player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET),
                                                 current_dealer,
                                                 m,
                                                 n,
@@ -1090,8 +1137,8 @@ async fn poker_client(
                                             &proof_reshuffle_bytes,
                                             joint_pk.as_ref().unwrap(),
                                             deck.as_ref().unwrap(),
-                                            &player,
-                                            &player_id,
+                                            &player.as_ref().expect(ERROR_PLAYER_NOT_SET),
+                                            &player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET),
                                             current_dealer,
                                             m,
                                             n,
@@ -1131,9 +1178,9 @@ async fn poker_client(
                                                 &public_shuffle_bytes,
                                                 &proof_shuffle_bytes,
                                                 &mut current_shuffler,
-                                                &player_id,
+                                                &player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET),
                                                 num_players_expected,
-                                                &mut player,
+                                                &mut player.as_mut().expect(ERROR_PLAYER_NOT_SET),
                                                 &mut connected_peers,
                                                 &mut swarm,
                                                 &topic,
@@ -1166,9 +1213,9 @@ async fn poker_client(
                                             &public_shuffle_bytes,
                                             &proof_shuffle_bytes,
                                             &mut current_shuffler,
-                                            &player_id,
+                                            &player_id.as_ref().expect(ERROR_PLAYER_ID_NOT_SET),
                                             num_players_expected,
-                                            &mut player,
+                                            &mut player.as_mut().expect(ERROR_PLAYER_NOT_SET),
                                             &mut connected_peers,
                                             &mut swarm,
                                             &topic,

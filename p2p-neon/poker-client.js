@@ -20,14 +20,9 @@ async function loadBlockchainApi() {
   }
 }
 
-async function poker_client(player_id, setCommunityCard, setPrivateCards, useTerminal) {
-  if (!player_id) {
-    console.error("Player id is required");
-    return;
-  }
+async function poker_client(setCommunityCard, setPrivateCards, useTerminal) {
   const BlockchainApi = await loadBlockchainApi();
   console.log("BlockchainApiClass", BlockchainApi);
-
 
   function verifyPublicKey(public_key, r, s) {
     console.log("Javascript: Verify public key");
@@ -94,21 +89,21 @@ async function poker_client(player_id, setCommunityCard, setPrivateCards, useTer
     // community_cards[pos] = card;
     console.log(`JS → Community[${pos}] = ${card}`);
     console.log("................. end javascript ......................");
-    // setCommunityCard(pos, card);
+    setCommunityCard(pos, card);
   }
 
-  function revealPrivateCard(pos, card) {
+  function revealPrivateCard(cards) {
     console.log("Javascript: Reveal private card");
     // private_cards[pos] = card;
-    console.log(`JS → Private[${pos}]   = ${card}`);
+    // console.log(`JS → Private[${pos}]   = ${card}`);
+    console.log(`JS → Private[${cards}]   = ${cards}`);
     console.log("................. end javascript ......................");
-    // setPrivateCards(pos, card);
+    setPrivateCards(cards);
   }
 
   console.log("Javascript: Starting poker client");
   // Arrancamos la tarea Rust
   poker_client_async(
-    player_id,
     verifyPublicKey,
     verifyShuffling,
     verifyRevealToken,
@@ -116,9 +111,20 @@ async function poker_client(player_id, setCommunityCard, setPrivateCards, useTer
     revealPrivateCard
   );
 
-  function start() {
-    console.log("JS → send_line('start')");
-    send_line("start");
+  
+  function sendPublicKey(player_address) {
+    console.log("JS → send_line('sendPublicKey')");
+    send_line("sendPublicKey ${player_address}");
+  }
+
+  function setPlayerId(player_id) {
+    console.log("JS → send_line('setPlayerId')");
+    send_line("setPlayerId ${player_id}");
+  }
+
+  function startShuffling() {
+    console.log("JS → send_line('startShuffling')");
+    send_line("startShuffling");
   }
   function flop() {
     console.log("JS → send_line('flop')");
@@ -181,6 +187,7 @@ async function poker_client(player_id, setCommunityCard, setPrivateCards, useTer
     });
   } else {
     return {
+      setPlayerId,
       start,
       flop,
       turn,
