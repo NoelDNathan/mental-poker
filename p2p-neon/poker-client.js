@@ -1,6 +1,8 @@
 const { poker_client_async, send_line } = require(".");
 // const BlockchainApiClass = require("../../frontend/src/bridge/BlockchaiApi"); // Comentado por ahora
 
+let BlockchainApi = null; // Variable global para almacenar la instancia
+
 async function loadBlockchainApi() {
   try {
     const pokerContractInfo = require("../../smartcontracts/contracts-config.json");
@@ -11,9 +13,12 @@ async function loadBlockchainApi() {
 
     const pokerContractAddress = pokerContractInfo.poker_diamond;
     const tokenContractAddress = pokerContractInfo.gameToken;
-    const instance = new module.default(pokerContractAddress, tokenContractAddress, "account");
-    console.log("BlockchainApiClass", instance);
-    return instance;
+
+    return {
+      module,
+      pokerContractAddress,
+      tokenContractAddress,
+    };
   } catch (error) {
     console.warn("Could not load BlockchainAPI:", error.message);
     return null;
@@ -21,15 +26,12 @@ async function loadBlockchainApi() {
 }
 
 async function poker_client(setCommunityCard, setPrivateCards, useTerminal) {
-  const BlockchainApi = await loadBlockchainApi();
-  console.log("BlockchainApiClass", BlockchainApi);
-
   function verifyPublicKey(public_key, r, s) {
     console.log("Javascript: Verify public key");
     console.log("JS Public key:", public_key);
     console.log("JS Proof:", r, s);
     console.log("................. end javascript ......................");
-    BlockchainApiClass.newPlayer(105, public_key, r, s);
+    BlockchainApi?.setPlayerCryptoParams(public_key, r, s, setPlayerId);
   }
 
   function verifyShuffling(pubSignals, proof) {
@@ -37,12 +39,12 @@ async function poker_client(setCommunityCard, setPrivateCards, useTerminal) {
     // console.log("JS Public info:", pubSignals);
     // console.log("JS Proof:", proof);
     console.log("................. end javascript ......................");
-    BlockchainApiClass.shufflingCards(proof[0], proof[1], proof[2], pubSignals);
+    BlockchainApi?.shufflingCards(proof[0], proof[1], proof[2], pubSignals);
   }
   function verifyReshuffling(pubSignals, proof) {
     console.log("Javascript: Reshuffling");
     console.log("................. end javascript ......................");
-    BlockchainApiClass.reshufflingCards(proof[0], proof[1], proof[2], pubSignals);
+    BlockchainApi?.reshufflingCards(proof[0], proof[1], proof[2], pubSignals);
   }
 
   // @param G Base point G
@@ -81,7 +83,7 @@ async function poker_client(setCommunityCard, setPrivateCards, useTerminal) {
     const A = [A_card1, A_card2];
     const B = [B_card1, B_card2];
     const r = [r_card1, r_card2];
-    BlockchainApiClass.sendRevealPlayerCardTokens(receiverChair, tokens, A, B, r);
+    BlockchainApi?.sendRevealPlayerCardTokens(receiverChair, tokens, A, B, r);
   }
 
   function revealCommunityCard(pos, card) {
@@ -111,10 +113,22 @@ async function poker_client(setCommunityCard, setPrivateCards, useTerminal) {
     revealPrivateCard
   );
 
-  
-  function sendPublicKey(player_address) {
+  async function sendPublicKey(player_address) {
+    try {
+      const blockchainConfig = await loadBlockchainApi();
+      console.log("BlockchainConfig", blockchainConfig);
+
+      BlockchainApi = new blockchainConfig.module.default(
+        blockchainConfig.pokerContractAddress,
+        blockchainConfig.tokenContractAddress,
+        player_address
+      );
+    } catch (error) {
+      console.error("Error initializing BlockchainApiClass:", error);
+    }
+
     console.log("JS → send_line('sendPublicKey')");
-    send_line("sendPublicKey ${player_address}");
+    send_line(`sendPublicKey ${player_address}`);
   }
 
   function setPlayerId(player_id) {
@@ -187,8 +201,9 @@ async function poker_client(setCommunityCard, setPrivateCards, useTerminal) {
     });
   } else {
     return {
+      sendPublicKey,
       setPlayerId,
-      start,
+      startShuffling,
       flop,
       turn,
       river,

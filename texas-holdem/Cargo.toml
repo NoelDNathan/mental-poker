@@ -15,7 +15,7 @@ blake2 = { version = "0.9", default-features = false }
 merlin = "3.0.0"
 proof-essentials = {path = "../proof-essentials" }
 rand = "0.8.4"
-starknet-curve = { git = "ssh://git@github.com/geometryresearch/proof-toolbox.git" }
+starknet-curve = { git = "https://github.com/geometryresearch/proof-toolbox.git"}
 thiserror = "1.0.30"
 babyjubjub = {path = "../babyjubjub"}
 regex = "1.0.0"

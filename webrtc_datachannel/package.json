@@ -1,0 +1,17 @@
+{
+  "name": "web-rtc-example2",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "webpack",
+    "serve": "webpack serve --open",
+    "build-wasm": "wasm-pack build --target web --out-dir pkg"
+  },
+  "devDependencies": {
+    "@wasm-tool/wasm-pack-plugin": "^1.6.0",
+    "html-webpack-plugin": "^5.5.0",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.0",
+    "webpack-dev-server": "^4.15.0"
+  }
+  
+}

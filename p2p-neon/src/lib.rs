@@ -1543,7 +1543,7 @@ fn send_protocol_message(
     topic: &gossipsub::IdentTopic,
     message: &ProtocolMessage,
 ) -> Result<(), Box<dyn Error>> {
-    let serialized = serde_json::to_string(&message)?;
+    let serialized: String = serde_json::to_string(&message)?;
     send_message(swarm, topic, &serialized.as_bytes())
 }
 
