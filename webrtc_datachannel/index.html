@@ -2,9 +2,64 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>WebRTC DataChannel example</title>
+    <title>WebRTC Sequential Initialization Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        .demo-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(45deg, #2c3e50, #3498db);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .content {
+            padding: 30px;
+        }
+        .console-note {
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+    </style>
 </head>
 <body>
-  <p>Open DevTools and check the Console.</p>
+    <div class="container">
+        <div class="demo-card">
+            <div class="header">
+                <h1 style="margin: 0; font-size: 2.5em;">🔗 WebRTC Demo</h1>
+                <p style="margin: 10px 0 0 0; opacity: 0.9;">Sequential Client Initialization</p>
+            </div>
+            <div class="content">
+                <div class="console-note">
+                    <strong>📋 Instructions:</strong>
+                    <ul>
+                        <li>Open DevTools (F12) and check the Console for detailed logs</li>
+                        <li>Follow the sequential steps using the buttons that will appear</li>
+                        <li>Watch the WebRTC connection establish between two peer clients</li>
+                    </ul>
+                </div>
+                <!-- The Rust WASM code will inject the interactive buttons here -->
+            </div>
+        </div>
+    </div>
+    <script src="index.js"></script>
 </body>
 </html>

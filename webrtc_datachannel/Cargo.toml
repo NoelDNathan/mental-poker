@@ -23,6 +23,13 @@ web-sys = { version = "0.3.8", features = [
   "RtcIceCandidate",
   "RtcDataChannel",
   "RtcDataChannelEvent",
+  "Window",
+  "Document",
+  "Element",
+  "HtmlElement",
+  "HtmlButtonElement",
+  "Node",
+  "EventTarget",
 ] }
 
 # Configuración específica para evitar problemas con externref
