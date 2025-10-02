@@ -153,6 +153,9 @@ pub struct InternalPlayer {
     pub opened_cards: Vec<Option<ClassicPlayingCard>>,
 }
 
+
+
+
 impl InternalPlayer {
     pub fn new<R: Rng>(rng: &mut R, pp: &CardParameters, name: &Vec<u8>) -> anyhow::Result<Self> {
         let (pk, sk) = CardProtocol::player_keygen(rng, pp)?;

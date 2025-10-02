@@ -5,4 +5,10 @@ members = [
     "barnett-smart-card-protocol",
     "zk-reshuffle", 
     "babyjubjub", 
-    "proof-essentials", "texas-holdem", "p2p-connection4", "p2p-neon", "p2p-web-assembly", "webrtc_datachannel"]
+    "proof-essentials", 
+    "texas-holdem", 
+    "WebRTC-in-Rust/wasm_client",
+    "WebRTC-in-Rust/signalling-server", 
+    "WebRTC-in-Rust/shared-protocol",
+    #"WebRTC-in-Rust/turn-server"
+]

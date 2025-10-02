@@ -7,9 +7,9 @@ use ark_ff::{to_bytes, PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError};
 use ark_std::io::{Read, Write};
 use ark_std::UniformRand;
+use hex;
 use sha3::digest::FixedOutputReset;
 use sha3::Digest;
-use hex;
 
 #[derive(CanonicalDeserialize, CanonicalSerialize)]
 pub struct Proof<C>
@@ -28,7 +28,6 @@ impl<C: ProjectiveCurve> Proof<C> {
         statement: &Statement<C>,
         hasher: &mut D,
     ) -> Result<(), CryptoError> {
-
         // println!("verify parameters.g (P): {:?}", parameters.g.to_string());
         // println!("verify parameters.h (Q): {:?}", parameters.h.to_string());
         // println!("verify statement.0 (R): {:?}", statement.0.to_string());
@@ -54,7 +53,7 @@ impl<C: ProjectiveCurve> Proof<C> {
         let hash_bytes = hasher.finalize_reset();
 
         println!("verify hash_bytes: {:?}", hex::encode(hash_bytes.clone()));
-      
+
         let c = C::ScalarField::from_be_bytes_mod_order(&hash_bytes);
 
         println!("verify c: {:?}", c.to_string());

@@ -30,7 +30,7 @@ use proof_essentials::zkp::{
 };
 use std::marker::PhantomData;
 
-use babyjubjub::{self, Fq};
+use babyjubjub::{self, EdwardsAffine, Fq};
 
 use regex;
 use zk_reshuffle::{CircomProver, Proof};
@@ -44,6 +44,9 @@ mod remasking;
 mod reveal;
 mod tests;
 use ark_ec::{AffineCurve, ProjectiveCurve};
+use rand::rngs::StdRng;
+
+use std::str::FromStr;
 
 pub trait HasCoordinates {
     fn get_x(&self) -> String;
@@ -73,12 +76,25 @@ pub struct DLCards<'a, C: ProjectiveCurve> {
     _group: &'a PhantomData<C>,
 }
 
+#[derive(Clone)]
 pub struct Parameters<C: ProjectiveCurve> {
     pub m: usize,
     pub n: usize,
     pub enc_parameters: el_gamal::Parameters<C>,
     pub commit_parameters: pedersen::CommitKey<C>,
     pub generator: el_gamal::Generator<C>,
+}
+pub fn generator() -> EdwardsAffine {
+    EdwardsAffine::new(
+        Fq::from_str(
+            "5299619240641551281634865583518297030282874472190772894086521144482721001553",
+        )
+    .unwrap(),
+    Fq::from_str(
+        "16950150798460657717958625567821834550301663161624707787222815936182638968203",
+    )
+    .unwrap(),
+    )
 }
 
 impl<C: ProjectiveCurve> Parameters<C> {
@@ -98,6 +114,8 @@ impl<C: ProjectiveCurve> Parameters<C> {
         }
     }
 }
+
+
 
 pub type PublicKey<C> = el_gamal::PublicKey<C>;
 

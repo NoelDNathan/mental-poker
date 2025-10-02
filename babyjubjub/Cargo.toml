@@ -12,17 +12,17 @@ ark-bn254 = "0.3.0"
 ark-ed-on-bn254 = "0.3.0"
 ark-serialize = "0.3.0"
 
-[dev-dependencies]
-ark-relations = "0.3.0"
-ark-serialize = "0.3.0"
-ark-algebra-test-templates = "0.3.0"
-ark-curve-constraint-tests = "0.3.0"
-rand = { version = "0.7", default-features = false }
-rand_xorshift = "0.2"
-
+#[dev-dependencies]
+#ark-relations = { git = "https://github.com/arkworks-rs/snark.git", default-features = false }
+#ark-serialize = "0.3.0"
+#ark-algebra-test-templates = "0.3.0"
+#ark-curve-constraint-tests = "0.3.0"
+#rand = { version = "0.7", default-features = false }
+#rand_xorshift = "0.2"
 [features]
 default = []
 std = [ "ark-std/std", "ark-ff/std", "ark-ec/std", "ark-bn254/std" ]
 r1cs = ["ark-r1cs-std"]
 asm = [ "ark-ff/asm" ]
 ed_on_bn254 = []
+
