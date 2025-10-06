@@ -1,0 +1,14 @@
+[workspace]
+members = ["circom-compat", "zk-reshuffle"]
+resolver = "2"
+
+[patch.crates-io]
+#ark-ff = { git = "https://github.com/arkworks-rs/algebra.git" }
+#ark-ec = { git = "https://github.com/arkworks-rs/algebra.git" }
+#ark-serialize = { git = "https://github.com/arkworks-rs/algebra.git" }
+#ark-bn254 = { git = "https://github.com/arkworks-rs/algebra.git" }
+#ark-poly = { git = "https://github.com/arkworks-rs/algebra.git" }
+#ark-groth16 = { git = "https://github.com/arkworks-rs/groth16.git" }
+#ark-crypto-primitives = { git = "https://github.com/arkworks-rs/crypto-primitives.git" }
+#ark-relations = { git = "https://github.com/arkworks-rs/snark.git" }
+

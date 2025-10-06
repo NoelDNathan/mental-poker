@@ -14,7 +14,7 @@ use rand::thread_rng;
 use std::collections::HashMap;
 use std::iter::Iterator;
 use thiserror::Error;
-use zk_reshuffle::{CircomProver};
+// use zk_reshuffle::{CircomProver};
 
 use ark_ec::{AffineCurve, ProjectiveCurve};
 use babyjubjub::{EdwardsAffine, EdwardsProjective, Fq, Fr};
