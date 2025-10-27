@@ -1,5 +1,6 @@
 [workspace]
 members = ["circom-compat", "zk-reshuffle"]
+
 resolver = "2"
 
 [patch.crates-io]

@@ -47,6 +47,7 @@ use ark_ec::{AffineCurve, ProjectiveCurve};
 use rand::rngs::StdRng;
 
 use std::str::FromStr;
+use log::info;
 
 pub trait HasCoordinates {
     fn get_x(&self) -> String;
@@ -255,7 +256,13 @@ where
         original_card: &Self::Card,
         r: &Self::Scalar,
     ) -> Result<(Self::MaskedCard, Self::ZKProofMasking), CardProtocolError> {
+        info!("Original card: {:?}", original_card.0.to_string());
+        info!("Shared key: {:?}", shared_key.to_string());
+        info!("R: {:?}", r.to_string());
+        info!("generator: {:?}", pp.enc_parameters.generator.to_string());
         let masked_card = original_card.mask(&pp.enc_parameters, shared_key, r)?;
+        info!("Masked card: {:?}", masked_card.0.to_string());
+        info!("Masked card 1: {:?}", masked_card.1.to_string());
         let gen = pp.enc_parameters.generator;
 
         // Map to Chaum-Pedersen parameters
@@ -566,7 +573,7 @@ where
         let G_str = Self::to_hex(G.into_projective());
 
         let mut deck_sorted = deck.clone();
-        deck_sorted.sort_by_key(|card| card.1.to_string());
+        // deck_sorted.sort_by_key(|card| card.1.to_string());
 
         let (Ca, Cb): (Vec<_>, Vec<_>) = deck_sorted
             .iter()
@@ -663,7 +670,7 @@ where
         }
 
         let mut deck_sorted = previous_deck.clone();
-        deck_sorted.sort_by_key(|card| card.1.to_string());
+        // deck_sorted.sort_by_key(|card| card.1.to_string());
 
         let verified = verifier
             .verify_proof(&public, &proof)
@@ -820,10 +827,10 @@ where
         let G_str = Self::to_hex(G.into_projective());
 
         let mut m_list_sorted = m_list.clone();
-        m_list_sorted.sort_by_key(|card| card.0.to_string());
+        // m_list_sorted.sort_by_key(|card| card.0.to_string());
 
         let mut deck_sorted = deck.clone();
-        deck_sorted.sort_by_key(|card| card.1.to_string());
+        // deck_sorted.sort_by_key(|card| card.1.to_string());
 
         let (Ca, Cb): (Vec<_>, Vec<_>) = deck_sorted
             .iter()
@@ -962,10 +969,10 @@ where
         }
 
         let mut deck_sorted = previous_deck.clone();
-        deck_sorted.sort_by_key(|card| card.1.to_string());
+        // deck_sorted.sort_by_key(|card| card.1.to_string());
 
         let mut m_list_sorted = m_list.clone();
-        m_list_sorted.sort_by_key(|card| card.0.to_string());
+        // m_list_sorted.sort_by_key(|card| card.0.to_string());
 
         let verified = verifier
             .verify_proof(&public, &proof)
