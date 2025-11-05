@@ -9,10 +9,10 @@ build/%.graph build/%.r1cs: %.circom $(BUILD_CIRCUIT) build
 
 # En tu Makefile
 build-shuffling:
-	$(BUILD_CIRCUIT) --r1cs build/shuffling.r1cs shuffling/shuffling.circom build/shuffling.graph --O0
+	$(BUILD_CIRCUIT) --r1cs build/shuffling.r1cs shuffling/shuffling.circom build/shuffling.graph
 
 build-reshuffling:
-	$(BUILD_CIRCUIT) --r1cs build/reshuffling.r1cs card_cancellation_v5/card_cancellation_v5.circom build/reshuffling.graph --O0
+	$(BUILD_CIRCUIT) --r1cs build/reshuffling.r1cs card_cancellation_v5/card_cancellation_v5.circom build/reshuffling.graph 
 
 
 ARK_CWC_SETUP = ../ark-circom-witnesscalc/target/release/ark_cwc_setup.exe
