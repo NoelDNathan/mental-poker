@@ -1,0 +1,8 @@
+calculate_winner_js/
+calculate_winner.r1cs
+calculate_winner.sym
+*.wtns
+witness.wtns
+node_modules/
+
+

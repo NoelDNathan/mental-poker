@@ -1,14 +1,2 @@
-main.pk 2
-main.H 2
-main.G 2
-main.Ca1_player 2
-main.Cb1_player 2
-main.Ca2_player 2
-main.Cb2_player 2
-main.m 104
-main.Ca 104
-main.Cb 104
-main.sk 1
-main.r_prime 52
-main.r_prime_G 104
-main.r_prime_H 104
+main.cardsRank 28
+main.cardsSuit 28

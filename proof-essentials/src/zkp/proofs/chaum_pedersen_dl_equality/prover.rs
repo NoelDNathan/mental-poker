@@ -10,6 +10,7 @@ use ark_std::{rand::Rng, UniformRand};
 use sha3::digest::FixedOutputReset;
 use sha3::Digest;
 use hex;
+use log::info;
 
 use std::marker::PhantomData;
 
@@ -63,6 +64,15 @@ where
         let c = C::ScalarField::from_be_bytes_mod_order(&hash_bytes2);
 
         let r = omega + c * *witness;
+
+        info!("r: {:?}", r.to_string());
+        info!("a: {:?}", a.to_string());
+        info!("b: {:?}", b.to_string());
+
+        info!("parameters.g: {:?}", parameters.g.to_string());
+        info!("parameters.h: {:?}", parameters.h.to_string());
+        info!("statement.0: {:?}", statement.0.to_string());
+        info!("statement.1: {:?}", statement.1.to_string());
 
         Ok(Proof { a, b, r })
     }

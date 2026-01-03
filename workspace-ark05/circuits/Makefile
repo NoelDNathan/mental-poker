@@ -15,6 +15,10 @@ build-reshuffling:
 	$(BUILD_CIRCUIT) --r1cs build/reshuffling.r1cs card_cancellation_v5/card_cancellation_v5.circom build/reshuffling.graph 
 
 
+build-calculate:
+	$(BUILD_CIRCUIT) --r1cs build/calculate_winners.r1cs calculate_winnersV3/calculate_winners.circom build/calculate_winners.graph 
+
+
 ARK_CWC_SETUP = ../ark-circom-witnesscalc/target/release/ark_cwc_setup.exe
 
 .PRECIOUS: build/%.ark-pkey build/%.ark-vk build/%.ark-vk-json
