@@ -64,6 +64,15 @@ pub enum Suite {
 
 impl Suite {
     const VALUES: [Self; 4] = [Self::Club, Self::Diamond, Self::Heart, Self::Spade];
+
+    pub fn symbol(self) -> &'static str {
+        match self {
+            Suite::Club => "♣",
+            Suite::Diamond => "♦",
+            Suite::Heart => "♥",
+            Suite::Spade => "♠",
+        }
+    }
 }
 
 #[derive(PartialEq, PartialOrd, Clone, Copy, Eq)]
@@ -99,6 +108,24 @@ impl Value {
         Self::King,
         Self::Ace,
     ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Value::Two => "2",
+            Value::Three => "3",
+            Value::Four => "4",
+            Value::Five => "5",
+            Value::Six => "6",
+            Value::Seven => "7",
+            Value::Eight => "8",
+            Value::Nine => "9",
+            Value::Ten => "10",
+            Value::Jack => "J",
+            Value::Queen => "Q",
+            Value::King => "K",
+            Value::Ace => "A",
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Eq, Copy)]
@@ -110,6 +137,22 @@ pub struct ClassicPlayingCard {
 impl ClassicPlayingCard {
     pub fn new(value: Value, suite: Suite) -> Self {
         Self { value, suite }
+    }
+
+    pub fn value(self) -> Value {
+        self.value
+    }
+
+    pub fn suite(self) -> Suite {
+        self.suite
+    }
+
+    pub fn rank_label(self) -> &'static str {
+        self.value.label()
+    }
+
+    pub fn suite_symbol(self) -> &'static str {
+        self.suite.symbol()
     }
 }
 
