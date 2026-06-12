@@ -23,6 +23,58 @@ enlazadas (precompute en background + residual en el turno), produciendo el
 calldata que esperan los facets nuevos:
 `submitPrecompute` + `shufflingCards(_, _, _, LegoLink, pubs)`.
 
+## HALLAZGOS de investigación (2026-06-12) — responden las 2 incógnitas
+
+### Pregunta 1: ¿el witnesscalc soporta los .wasm lego? → SÍ, bajo riesgo. No hay que portar nada.
+
+El prover activo del cliente (`zk_reshuffle::CircomProver`, lib.rs:135) NO usa
+el formato `.graph` de witness_calc.rs (eso es código alternativo comentado).
+Usa **`ark-circom`** (fork local `circom-compat`): carga el `.wasm` de circom
+con `CircomConfig::new_from_bytes(WASM, R1CS)` + `CircomBuilder`, que ejecuta el
+witness calculator wasm por su ABI estándar de circom 2.x.
+
+Verificado: los 4 .wasm (shuffling/cancellation actuales del cliente y
+shuffling_multiset_lego/card_cancellation_lego del lab) exponen `getVersion`
+— el mismo runtime de circom 2.x. Los lego se compilaron con circom 2.2.1,
+mismo formato de ABI que los actuales. Si ark-circom carga los de hoy, carga
+los lego.
+
+**Lo decisivo (diseño del lab confirmado):** el prover wasm del lab
+(`legogroth16-wasm/src/lib.rs`) hace `prove(witness_json, seed)` — RECIBE el
+witness ya calculado como JSON de decimales y solo hace el MSM/prove lego. El
+witness es un `Vec<Fr>` (decimales), **idéntico en ark 0.4 y ark 0.5** (mismo
+campo BN254). Es la frontera limpia entre stacks.
+
+Arquitectura resultante (sin portar sintetizador):
+1. el cliente calcula el witness del circuito lego con su ark-circom existente
+   (extrayendo el FULL witness, no solo los public inputs);
+2. lo serializa a `Vec<String>` decimal;
+3. lo pasa al crate `lego-prover` (ark 0.4) que hace el prove cp_link.
+Fallback si ark-circom no cargara algún .wasm (improbable): el
+`witness_calculator.js` de circom (ya probado en `export-lego-witness.mjs`)
+llamado desde Rust/wasm vía js_sys. Tampoco requiere portar nada.
+
+### Pregunta 2: ProtocolMessage → cambio MÍNIMO, no estructural.
+
+`ProtocolMessage` (handle_poker_messages.rs:103) lleva las proofs como
+`Vec<u8>` OPACO, troceadas en chunks (`ZKProofShuffleChunk/Proof`,
+`ZKProofRemoveAndRemaskChunk/Proof`). La estructura del enum NO depende del
+contenido: hoy viaja una proof Groth16 serializada; mañana viajan los bytes
+del `LegoLink + pubs`. Las variantes existentes sirven tal cual.
+
+Lo que sí cambia:
+- el contenido serializado dentro de esos `Vec<u8>` (de Groth16 plano a
+  LegoLink+pubs+proof — definir un struct `serde` y serializar/deserializar);
+- añadir el flujo de la PRECOMPUTE: necesita su propio par de mensajes
+  (`ZKProofPrecomputeChunk/Proof`) o reusar un canal — DECISIÓN para el usuario;
+- el cliente habla con el frontend por **callbacks JS** (`js_sys::Function`
+  guardados en `PokerState`, p.ej. `s.set_initial_deck`), no por un enum de
+  FrontendMessage. El puente para mandar la proof+link al frontend (para la tx
+  on-chain) es un callback JS nuevo análogo a los existentes.
+
+shared-protocol/src/lib.rs NO contiene ProtocolMessage (solo `SignalEnum` del
+signalling) → **shared-protocol NO se toca**. Todo vive en wasm_client.
+
 ## El obstáculo central: choque de versiones arkworks
 
 `legogroth16` (Dock) vive en **arkworks 0.4**; el cliente usa **0.5**. No se
