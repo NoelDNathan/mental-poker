@@ -1,0 +1,48 @@
+[package]
+name = "lego-prover"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Prover LegoGroth16 (cp_link) aislado en arkworks 0.4 para el cliente de poker. Frontera por bytes/strings: el wasm_client (ark 0.5) lo consume sin ver tipos ark 0.4."
+
+# Raiz de workspace propia: aisla ark 0.4 del workspace padre (ark 0.5) y le da
+# su propio Cargo.lock.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# legogroth16 SIN su feature `std` (esa arrastra la feature `circom` -> wasmer,
+# que no compila a wasm32). Reusamos la misma config que el lab wasm.
+legogroth16 = { version = "0.18.0", default-features = false }
+
+ark-bn254 = "0.4.0"
+ark-ec = "0.4.0"
+ark-ff = "0.4.0"
+ark-poly = "0.4.0"
+ark-std = "0.4.0"
+ark-relations = "0.4.0"
+ark-serialize = "0.4.0"
+
+sha2 = "0.10"
+serde_json = "1"
+hex = "0.4"
+getrandom = { version = "0.2", features = ["js"] }
+
+[dev-dependencies]
+ark-std = { version = "0.4.0", features = ["std"] }
+
+[features]
+# Igual que el lab: NO el `parallel` de legogroth16 (arrastra std -> wasmer);
+# si el `parallel` de arkworks, donde vive el MSM/FFT pesado.
+parallel = [
+    "ark-ec/parallel",
+    "ark-ff/parallel",
+    "ark-poly/parallel",
+    "ark-std/parallel",
+]
+
+[profile.release]
+opt-level = 3
+lto = false
