@@ -108,4 +108,13 @@ fn setup_prove_verify_shuffle() {
         "el link_d de la proof != el link_d calculado fuera del prover"
     );
     assert!(verify(&pk, &proof, &public_inputs), "la proof no verifica");
+
+    // LegoProofJson: construccion desde la proof + round-trip por JSON (la
+    // frontera con el wasm_client). El link_d del JSON debe ser el esperado.
+    let pubs_dec: Vec<String> = public_inputs.iter().map(|f| f.to_string()).collect();
+    let json = lego_prover::LegoProofJson::from_proof(&proof, &pubs_dec);
+    assert_eq!((json.link_d.x.clone(), json.link_d.y.clone()), expected_link_d());
+    let round = lego_prover::LegoProofJson::from_json_str(&json.to_json_string());
+    assert_eq!(round, json, "round-trip JSON de LegoProofJson no es identidad");
+    assert_eq!(round.pubs.len(), public_inputs.len());
 }

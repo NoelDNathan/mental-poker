@@ -14,8 +14,10 @@ Reusa el codigo ya probado del lab
 
 - [x] **3.1** Maquinaria comun + circuito residual (shuffle). Gate: el `link_d`
   reproduce bit a bit el del lab (`tests/link_d_repro.rs`).
-- [ ] **3.2** API por bytes + structs serde (`LegoProofJson`) + Fiat-Shamir
-  keccak con el mismo encoding que el verifier Solidity.
+- [x] **3.2** Structs serde (`LegoProofJson`, frontera por bytes/decimales) +
+  Fiat-Shamir keccak (`derive_alpha_beta`). Gate: alpha/beta reproducen el
+  encoding del verifier Solidity / script del lab (`tests/fs_repro.rs`), y
+  `LegoProofJson::from_proof` + round-trip JSON sobre una proof real.
 - [ ] **3.3** Witness de los circuitos lego (witnesscalc del repo).
 - [ ] **3.4** Integracion en `wasm_client`.
 - [ ] **3.5** Build wasm32 multihilo.

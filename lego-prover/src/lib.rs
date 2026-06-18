@@ -22,10 +22,14 @@ use legogroth16::{
 };
 
 pub mod circuit;
+pub mod fs;
 pub mod link;
+pub mod proof_json;
 
 pub use circuit::{CircuitR1cs, ProverCircuit, R1csConstraint};
+pub use fs::{derive_alpha_beta, NUM_FS_PUBLICS};
 pub use link::{compute_link_d, make_link_gens, COMMIT_WITNESS_COUNT};
+pub use proof_json::{G1Json, G2Json, LegoProofJson};
 
 type E = Bn254;
 
