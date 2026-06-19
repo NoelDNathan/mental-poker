@@ -8,8 +8,11 @@ use core::str::FromStr;
 use ark_bn254::{Bn254, Fr};
 use ark_std::rand::{rngs::StdRng, SeedableRng};
 
+use ark_ec::AffineRepr;
+
 use crate::{
-    link_v_from_seed, load_pk, load_r1cs, prove_with_link_v, verify, CircuitR1cs, LegoProofJson,
+    compute_link_d, derive_alpha_beta, link_v_from_seed, load_pk, load_r1cs, make_link_gens,
+    prove_with_link_v, verify, CircuitR1cs, G1Json, LegoProofJson, COMMIT_WITNESS_COUNT,
 };
 use legogroth16::ProvingKeyWithLink;
 
@@ -59,6 +62,41 @@ fn prove_residual(
     ProveOutput {
         proof: json,
         verified,
+    }
+}
+
+/// Challenges Fiat-Shamir del shuffle derivados por el cliente: `alpha`, `beta`
+/// (decimales) y el commitment `link_d`. Se calculan en la pasada
+/// commit-then-challenge ANTES de la pasada final del witness.
+pub struct ShuffleChallenges {
+    pub alpha: String,
+    pub beta: String,
+    pub link_d: G1Json,
+}
+
+/// Deriva los challenges del shuffle: `link_d = MSM(NUMS, committed || link_v)`
+/// y `alpha/beta = keccak(...)`. `committed` son los 208 r'_G||r'_H (que el
+/// cliente ya conoce: son inputs), `pubs` los 420 publics que preceden a los
+/// challenges (`wires[1..421]`, no dependen de alpha/beta).
+pub fn shuffle_challenges(
+    committed: &[String],
+    pubs: &[String],
+    link_v_seed: u64,
+) -> ShuffleChallenges {
+    let cw = parse_decimals(committed);
+    let pubs_fr = parse_decimals(pubs);
+    let link_gens = make_link_gens(COMMIT_WITNESS_COUNT + 1);
+    let link_v = link_v_from_seed(link_v_seed);
+    let link_d_pt = compute_link_d(&link_gens.pedersen_gens, &cw, link_v);
+    let (alpha, beta) = derive_alpha_beta(&link_d_pt, &pubs_fr);
+    let (x, y) = link_d_pt.xy().expect("link_d no es identidad");
+    ShuffleChallenges {
+        alpha: alpha.to_string(),
+        beta: beta.to_string(),
+        link_d: G1Json {
+            x: x.to_string(),
+            y: y.to_string(),
+        },
     }
 }
 
