@@ -115,6 +115,41 @@ pub fn prove_reshuffle(full_witness: &[String], link_v_seed: u64) -> ProveOutput
     prove_residual(&pk, &r1cs, full_witness, link_v_seed)
 }
 
+/// Prueba el PRECOMPUTE (`rerandomization_precompute_52_lego`) desde su FULL
+/// witness. A diferencia del shuffle/reshuffle, su PK (~20 MB) NO se embebe: se
+/// pasa por bytes (load-on-demand en el navegador, capa 3.4b paso 3 — pool de
+/// background). Comparte con el residual los MISMOS 208 committed witnesses
+/// (r'_G||r'_H), asi que con el MISMO `link_v_seed` produce el MISMO `link_d`:
+/// ese es el enlace cp_link entre la precompute de background y la residual del
+/// turno. Sin Fiat-Shamir (num_public = 5: G[2], H[2]).
+pub fn prove_precompute(
+    pk_bytes: &[u8],
+    r1cs_bytes: &[u8],
+    full_witness: &[String],
+    link_v_seed: u64,
+) -> ProveOutput {
+    let r1cs = load_r1cs(r1cs_bytes);
+    let pk = load_pk(pk_bytes);
+    prove_residual(&pk, &r1cs, full_witness, link_v_seed)
+}
+
+/// Verificacion P2P del precompute desde el bundle: solo cp_link contra sus
+/// publics (G, H), sin Fiat-Shamir. La PK (~20 MB) se pasa por bytes
+/// (load-on-demand). El enlace con la residual lo comprueba el caller exigiendo
+/// `precompute.link_d == residual.link_d`.
+pub fn verify_precompute_lego(proof: &LegoProofJson, pk_bytes: &[u8]) -> bool {
+    let pk = load_pk(pk_bytes);
+    let ark_proof = match proof.to_proof() {
+        Some(p) => p,
+        None => return false,
+    };
+    let public_inputs = match proof.public_inputs() {
+        Some(p) => p,
+        None => return false,
+    };
+    verify(&pk, &ark_proof, &public_inputs)
+}
+
 /// `num_public` del shuffle (`shuffling_multiset_lego`): 1 + 422 publics. Los
 /// `pubs` del JSON son `wires[1..num_public]` = 422 (420 FS-publics + alpha + beta).
 const SHUFFLE_NUM_PUBS: usize = 422;

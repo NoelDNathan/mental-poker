@@ -29,8 +29,8 @@ pub mod link;
 pub mod proof_json;
 
 pub use client::{
-    prove_reshuffle, prove_shuffle, shuffle_challenges, verify_reshuffle_lego, verify_shuffle_lego,
-    ProveOutput, ShuffleChallenges,
+    prove_precompute, prove_reshuffle, prove_shuffle, shuffle_challenges, verify_precompute_lego,
+    verify_reshuffle_lego, verify_shuffle_lego, ProveOutput, ShuffleChallenges,
 };
 
 pub use circuit::{CircuitR1cs, ProverCircuit, R1csConstraint};

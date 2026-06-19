@@ -298,6 +298,32 @@ Pasos 3.4b:
 3. Pool de precompute en background al entrar a la sala (PK 20 MB load-on-demand).
    El bundle confirmado es {precompute, residual, link_d, link_pi, pubs}; hoy solo
    se genera el residual.
+   - [HECHO prover nativo, 2026-06-19] `lego_prover::prove_precompute(pk_bytes,
+     r1cs_bytes, full_witness, link_v_seed)` + `verify_precompute_lego(proof,
+     pk_bytes)` (PK ~20 MB NO embebida, se pasa por bytes = load-on-demand).
+     Re-exportados en lego-prover/lib.rs. GATE `lego-prover/tests/precompute_prove.rs`
+     (release, ok 8.40s): genera precompute (PK del vendor zk-bench) + residual
+     reshuffle con el MISMO `link_v_seed` y EXIGE `precompute.link_d ==
+     residual.link_d` (el enlace del pool) + self-verify + tamper rechazado.
+     num_public precompute = 5 (G[2],H[2]) → 4 pubs en el JSON.
+   - PENDIENTE (browser-bound, type-checkeable pero no runtime-testeable nativo):
+     a) `zk_reshuffle::lego::prove_precompute_lego(input, link_v_seed, wasm, r1cs,
+        pk_bytes)` — frontera ark0.5: input = {G,H,r_prime_G,r_prime_H,r_prime};
+        computa el FULL witness con ark-circom (circom .wasm + .r1cs del precompute,
+        load-on-demand) y delega en `lego_prover::prove_precompute`. (NO embeber:
+        circom r1cs ~10.7 MB + PK ~21 MB → fetch JS).
+     b) wasm_client: pool en PokerState {r_prime, link_v_seed, precompute_proof},
+        generación en background al entrar a la sala (fetch de los 3 artefactos por
+        JS), consumir una entrada por turno pasando su r_prime+link_v_seed a
+        `shuffle_and_remask2_lego`/`remask_for_reshuffle_lego` (hoy usan seed
+        aleatorio, TODO marcado), y adjuntar la precompute al bundle.
+     c) DECISIÓN DE FORMATO DE BUNDLE (pendiente, afecta protocolo+capa4):
+        `ZKProofShuffleProof`/`ZKProofRemoveAndRemaskProof` hoy llevan UN
+        `LegoProofJson`. Para el pool hay que llevar AMBOS. Recomendado: struct
+        `LegoBundle {precompute, residual}` serializado al mismo mensaje (un solo
+        bundle, sin canal nuevo, alineado con la decisión del plan). El verificador
+        P2P comprueba: residual verifica (ya), precompute verifica
+        (`verify_precompute_lego`), y `precompute.link_d == residual.link_d`.
 4. 3.5 build wasm-pack multihilo; 3.6 medir.
 
 ## Capa 4 (depende de la 3)
