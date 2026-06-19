@@ -942,6 +942,98 @@ where
         }
     }
 
+    /// Verificacion P2P del bundle lego del shuffle (capa 3.4b paso 2). Mismo
+    /// contrato que `verify_shuffle_remask2` (devuelve el mazo resultante) pero
+    /// partiendo de un `LegoProofJson` (lo que llega por WebRTC) en vez de
+    /// `(public: Vec<Fr>, proof: Groth16)`.
+    #[allow(non_snake_case)]
+    fn verify_shuffle_remask2_lego(
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        previous_deck: &Vec<Self::MaskedCard>,
+        proof: &zk_reshuffle::lego::LegoProofJson,
+    ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>
+    where
+        C: ProjectiveCurve,
+        C::Affine: HasCoordinates + GeneratePoints<C>,
+    {
+        // 1. Verificacion ZK del bundle (cp_link + re-derivacion Fiat-Shamir).
+        if !zk_reshuffle::lego::verify_shuffle_lego(proof) {
+            return Err(CardProtocolError::Other(
+                "proof lego del shuffle no verifica".to_string(),
+            ));
+        }
+
+        // 2. Public inputs (decimales) -> BigUint. Layout (= verify_shuffle_remask2):
+        // Ca_out[104] || Cb_out[104] || H[2] || G[2] || Ca[104] || Cb[104] (+alpha,beta).
+        let pubs: Vec<BigUint> = proof
+            .pubs
+            .iter()
+            .map(|s| {
+                BigUint::parse_bytes(s.as_bytes(), 10)
+                    .ok_or_else(|| CardProtocolError::Other(format!("pub no decimal: {s}")))
+            })
+            .collect::<Result<_, _>>()?;
+        if pubs.len() < 420 {
+            return Err(CardProtocolError::Other(format!(
+                "bundle lego con {} publics, se esperaban >=420",
+                pubs.len()
+            )));
+        }
+        let Ca_out = &pubs[0..104];
+        let Cb_out = &pubs[104..208];
+        let H = &pubs[208..210];
+        let G = &pubs[210..212];
+        let Ca = &pubs[212..316];
+        let Cb = &pubs[316..420];
+
+        // 3. H == shared_key, G == generador.
+        let shared_key_coords = Self::to_hex(shared_key.into_projective());
+        if shared_key_coords[0] != H[0] || shared_key_coords[1] != H[1] {
+            return Err(CardProtocolError::Other(
+                "H no coincide con shared_key".to_string(),
+            ));
+        }
+        let generator_coords = Self::to_hex(pp.enc_parameters.generator.into_projective());
+        if generator_coords[0] != G[0] || generator_coords[1] != G[1] {
+            return Err(CardProtocolError::Other(
+                "G no coincide con el generador".to_string(),
+            ));
+        }
+
+        // 4. Ca/Cb de los publics == previous_deck (el mazo que el peer ya tiene).
+        let (original_Ca, original_Cb): (Vec<_>, Vec<_>) = previous_deck
+            .iter()
+            .map(|masked_card| (masked_card.0, masked_card.1))
+            .unzip();
+        for i in 0..52 {
+            let ca_coords = Self::to_hex(original_Ca[i].into_projective());
+            let cb_coords = Self::to_hex(original_Cb[i].into_projective());
+            if ca_coords[0] != Ca[i * 2]
+                || ca_coords[1] != Ca[i * 2 + 1]
+                || cb_coords[0] != Cb[i * 2]
+                || cb_coords[1] != Cb[i * 2 + 1]
+            {
+                return Err(CardProtocolError::Other(format!(
+                    "Ca/Cb del bundle no coinciden con previous_deck en la posicion {i}"
+                )));
+            }
+        }
+
+        // 5. Reconstruye el mazo resultante desde Ca_out/Cb_out.
+        let mut masked_cards: Vec<Self::MaskedCard> = Vec::with_capacity(52);
+        for i in 0..52 {
+            let cax = Fq::from(Ca_out[i * 2].clone());
+            let cay = Fq::from(Ca_out[i * 2 + 1].clone());
+            let cbx = Fq::from(Cb_out[i * 2].clone());
+            let cby = Fq::from(Cb_out[i * 2 + 1].clone());
+            let ca = C::Affine::new(cax, cay);
+            let cb = C::Affine::new(cbx, cby);
+            masked_cards.push(el_gamal::Ciphertext(ca, cb));
+        }
+        Ok(masked_cards)
+    }
+
     fn parse_and_convert_to_decimal(input: &str) -> BigUint {
         // Extraer el número hexadecimal entre paréntesis usando expresiones regulares
         let re = regex::Regex::new(r"\(([0-9A-Fa-f]+)\)").unwrap();

@@ -63,4 +63,18 @@ fn shuffle_and_remask2_lego_real_deck_verifies() {
         422,
         "numero de public inputs del circuito shuffle lego"
     );
+
+    // Lado VERIFIER/peer (3.4b paso 2): verifica el bundle y reconstruye el mazo
+    // resultante desde Ca_out/Cb_out (exactamente lo que hara el receive handler).
+    let shuffled = CardProtocol::verify_shuffle_remask2_lego(&pp, &shared_key, &deck, &out.proof)
+        .expect("verify_shuffle_remask2_lego debe aceptar el bundle valido");
+    assert_eq!(shuffled.len(), deck_size, "mazo resultante de 52 cartas");
+
+    // Tamper: un public manipulado debe hacer fallar la verificacion del peer.
+    let mut bad = out.proof.clone();
+    bad.pubs[0] = "123".to_string();
+    assert!(
+        CardProtocol::verify_shuffle_remask2_lego(&pp, &shared_key, &deck, &bad).is_err(),
+        "un bundle manipulado debe rechazarse"
+    );
 }

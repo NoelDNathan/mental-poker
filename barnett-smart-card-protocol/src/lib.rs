@@ -244,6 +244,18 @@ pub trait BarnettSmartProtocol {
         link_v_seed: u64,
     ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError>;
 
+    /// Verificacion P2P del bundle lego del shuffle (capa 3.4b paso 2): lo que
+    /// hace cada peer al recibir un `LegoProofJson`. Verifica la proof (cp_link +
+    /// Fiat-Shamir, via `zk_reshuffle::lego::verify_shuffle_lego`), comprueba que
+    /// H/G/Ca/Cb de los publics cuadran con `shared_key`/`pp`/`previous_deck`, y
+    /// reconstruye el mazo resultante desde `Ca_out`/`Cb_out`.
+    fn verify_shuffle_remask2_lego(
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        previous_deck: &Vec<Self::MaskedCard>,
+        proof: &zk_reshuffle::lego::LegoProofJson,
+    ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>;
+
     /// Variante LegoGroth16 de `remask_for_reshuffle` (capa 3.4b). Construye el
     /// `input.json` del circuito `card_cancellation_lego` (sin Fiat-Shamir: una
     /// sola pasada de witness) y delega en
