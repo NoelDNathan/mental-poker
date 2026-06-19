@@ -37,7 +37,7 @@ pub use circuit::{CircuitR1cs, ProverCircuit, R1csConstraint};
 pub use circuits::{LegoCircuit, PRECOMPUTE, RESHUFFLE, SHUFFLE};
 pub use fs::{derive_alpha_beta, NUM_FS_PUBLICS};
 pub use link::{compute_link_d, make_link_gens, COMMIT_WITNESS_COUNT};
-pub use proof_json::{G1Json, G2Json, LegoProofJson};
+pub use proof_json::{G1Json, G2Json, LegoBundle, LegoProofJson};
 
 type E = Bn254;
 

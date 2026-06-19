@@ -38,6 +38,39 @@ pub struct LegoProofJson {
     pub pubs: Vec<String>,
 }
 
+/// El bundle que viaja por WebRTC en un turno con pool: la `precompute`
+/// generada en background + la `residual` del movimiento. Reutiliza los mensajes
+/// existentes (`ZKProofShuffleProof` / `ZKProofRemoveAndRemaskProof`) sin canal
+/// nuevo (decision del plan capa 3.4b paso 3). El verificador P2P comprueba:
+///   1. la residual verifica (barnett, reconstruye el mazo);
+///   2. la precompute verifica cp_link (`verify_precompute_lego`, PK load-on-demand);
+///   3. `links_match()` — ambas comparten `link_d` (mismo `link_v_seed` + mismos
+///      208 committed witnesses), el enlace que hace combinable el pool.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LegoBundle {
+    pub precompute: LegoProofJson,
+    pub residual: LegoProofJson,
+}
+
+impl LegoBundle {
+    pub fn to_json_string(&self) -> String {
+        serde_json::to_string(self).expect("serialize LegoBundle")
+    }
+
+    /// Deserializa un bundle recibido por WebRTC. Fallible (un peer no es de
+    /// confianza: entrada malformada NO debe hacer panic).
+    pub fn from_json_str(s: &str) -> Option<Self> {
+        serde_json::from_str(s).ok()
+    }
+
+    /// El enlace del pool: `precompute.link_d == residual.link_d`. Necesario
+    /// (no suficiente) para aceptar el bundle; el caller verifica ademas el ZK
+    /// de ambas proofs.
+    pub fn links_match(&self) -> bool {
+        self.precompute.link_d == self.residual.link_d
+    }
+}
+
 fn g1_json(p: &G1Affine) -> G1Json {
     let (x, y) = p.xy().expect("punto G1 no es identidad");
     G1Json {

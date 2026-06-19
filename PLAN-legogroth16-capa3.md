@@ -306,24 +306,32 @@ Pasos 3.4b:
      reshuffle con el MISMO `link_v_seed` y EXIGE `precompute.link_d ==
      residual.link_d` (el enlace del pool) + self-verify + tamper rechazado.
      num_public precompute = 5 (G[2],H[2]) → 4 pubs en el JSON.
-   - PENDIENTE (browser-bound, type-checkeable pero no runtime-testeable nativo):
-     a) `zk_reshuffle::lego::prove_precompute_lego(input, link_v_seed, wasm, r1cs,
-        pk_bytes)` — frontera ark0.5: input = {G,H,r_prime_G,r_prime_H,r_prime};
-        computa el FULL witness con ark-circom (circom .wasm + .r1cs del precompute,
-        load-on-demand) y delega en `lego_prover::prove_precompute`. (NO embeber:
-        circom r1cs ~10.7 MB + PK ~21 MB → fetch JS).
-     b) wasm_client: pool en PokerState {r_prime, link_v_seed, precompute_proof},
-        generación en background al entrar a la sala (fetch de los 3 artefactos por
-        JS), consumir una entrada por turno pasando su r_prime+link_v_seed a
-        `shuffle_and_remask2_lego`/`remask_for_reshuffle_lego` (hoy usan seed
-        aleatorio, TODO marcado), y adjuntar la precompute al bundle.
-     c) DECISIÓN DE FORMATO DE BUNDLE (pendiente, afecta protocolo+capa4):
-        `ZKProofShuffleProof`/`ZKProofRemoveAndRemaskProof` hoy llevan UN
-        `LegoProofJson`. Para el pool hay que llevar AMBOS. Recomendado: struct
-        `LegoBundle {precompute, residual}` serializado al mismo mensaje (un solo
-        bundle, sin canal nuevo, alineado con la decisión del plan). El verificador
-        P2P comprueba: residual verifica (ya), precompute verifica
-        (`verify_precompute_lego`), y `precompute.link_d == residual.link_d`.
+   - [HECHO a), 2026-06-19] `zk_reshuffle::lego::prove_precompute_lego(input,
+        link_v_seed, circom_wasm, circom_r1cs, lego_r1cs, lego_pk)` — frontera
+        ark0.5: input = {G,H,r_prime_G,r_prime_H,r_prime}; computa el FULL witness
+        con ark-circom (circom .wasm + .r1cs del precompute) y delega en
+        `lego_prover::prove_precompute`. NADA embebido (circom r1cs ~10.7 MB + PK
+        lego ~20 MB → fetch JS load-on-demand). OJO dos r1cs distintos: el circom
+        `.r1cs` (witnesscalc) y el lego `CircuitR1cs .bin` (cp_link). Compila verde
+        nativo (msvc). Re-exporta `verify_precompute_lego`.
+   - [HECHO c), 2026-06-19] FORMATO DE BUNDLE: struct `LegoBundle {precompute,
+        residual}` en `lego-prover/proof_json.rs` (re-exportado por zk-reshuffle).
+        `to_json_string` / `from_json_str` (fallible, sin panic para P2P) +
+        `links_match()` (precompute.link_d == residual.link_d). Viaja en
+        `ZKProofShuffleProof`/`ZKProofRemoveAndRemaskProof` (sin canal nuevo). El
+        verificador P2P comprobará: residual verifica (barnett), precompute verifica
+        (`verify_precompute_lego`, PK load-on-demand), y `links_match()`. GATE
+        rápido verde `lego-prover/tests/bundle.rs` (serde round-trip + link match +
+        rechazo de link_d distinto + entrada malformada → None).
+   - PENDIENTE b) (browser-bound, solo type-checkeable a wasm32, no runtime nativo):
+        wasm_client: pool en PokerState {r_prime, link_v_seed, precompute_proof},
+        generación en background al entrar a la sala (fetch de los 4 artefactos por
+        JS: circom wasm + circom r1cs + lego pk + lego r1cs), consumir una entrada
+        por turno pasando su r_prime+link_v_seed a
+        `shuffle_and_remask2_lego`/`remask_for_reshuffle_lego` (hoy usan seed y
+        r_prime aleatorios, TODO marcado en handle_poker_messages ~L2063 y ~L2515),
+        envolver en `LegoBundle` y enviarlo; verificador P2P deserializa el bundle
+        (residual + precompute + links_match).
 4. 3.5 build wasm-pack multihilo; 3.6 medir.
 
 ## Capa 4 (depende de la 3)
