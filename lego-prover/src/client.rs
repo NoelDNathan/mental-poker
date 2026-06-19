@@ -114,3 +114,53 @@ pub fn prove_reshuffle(full_witness: &[String], link_v_seed: u64) -> ProveOutput
     let pk = load_pk(RESHUFFLE_PK);
     prove_residual(&pk, &r1cs, full_witness, link_v_seed)
 }
+
+/// `num_public` del shuffle (`shuffling_multiset_lego`): 1 + 422 publics. Los
+/// `pubs` del JSON son `wires[1..num_public]` = 422 (420 FS-publics + alpha + beta).
+const SHUFFLE_NUM_PUBS: usize = 422;
+
+/// Verificacion P2P del residual del SHUFFLE desde el bundle (`LegoProofJson`),
+/// lo que hace cada peer al recibir la proof de otro. Comprueba:
+///   1. la proof cp_link verifica contra sus public inputs y la vk embebida;
+///   2. (seguridad Fiat-Shamir) alpha/beta del circuito (`pubs[420]`,`pubs[421]`)
+///      coinciden con los RE-DERIVADOS de `link_d` + los 420 FS-publics — impide
+///      que un prover elija challenges a su antojo (mismo check que el verifier
+///      Solidity `deriveChallenges`).
+/// Devuelve `false` ante cualquier entrada malformada (sin panic).
+pub fn verify_shuffle_lego(proof: &LegoProofJson) -> bool {
+    let pk = load_pk(SHUFFLE_PK);
+    verify_shuffle_lego_with_pk(&pk, proof)
+}
+
+fn verify_shuffle_lego_with_pk(pk: &ProvingKeyWithLink<Bn254>, proof: &LegoProofJson) -> bool {
+    let ark_proof = match proof.to_proof() {
+        Some(p) => p,
+        None => return false,
+    };
+    let public_inputs = match proof.public_inputs() {
+        Some(p) if p.len() == SHUFFLE_NUM_PUBS => p,
+        _ => return false,
+    };
+    if !verify(pk, &ark_proof, &public_inputs) {
+        return false;
+    }
+    // Re-derivacion Fiat-Shamir desde el link_d de la propia proof.
+    let fs_pubs = &public_inputs[..crate::NUM_FS_PUBLICS];
+    let (alpha, beta) = derive_alpha_beta(&ark_proof.link_d, fs_pubs);
+    alpha == public_inputs[crate::NUM_FS_PUBLICS] && beta == public_inputs[crate::NUM_FS_PUBLICS + 1]
+}
+
+/// Verificacion P2P del residual del RESHUFFLE/cancellation desde el bundle.
+/// Sin Fiat-Shamir (remask posicional): solo la proof cp_link contra sus publics.
+pub fn verify_reshuffle_lego(proof: &LegoProofJson) -> bool {
+    let pk = load_pk(RESHUFFLE_PK);
+    let ark_proof = match proof.to_proof() {
+        Some(p) => p,
+        None => return false,
+    };
+    let public_inputs = match proof.public_inputs() {
+        Some(p) => p,
+        None => return false,
+    };
+    verify(&pk, &ark_proof, &public_inputs)
+}

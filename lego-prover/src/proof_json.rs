@@ -3,11 +3,13 @@
 //! exports on-chain del lab: G1 = (x, y); G2 en orden EIP-197 (parte imaginaria
 //! primero). `pubs` son los public inputs del circuito en decimal.
 
-use ark_bn254::{Bn254, G1Affine, G2Affine};
+use core::str::FromStr;
+
+use ark_bn254::{Bn254, Fq, Fq2, Fr, G1Affine, G2Affine};
 use ark_ec::AffineRepr;
 use serde::{Deserialize, Serialize};
 
-use legogroth16::ProofWithLink;
+use legogroth16::{Proof, ProofWithLink};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct G1Json {
@@ -76,4 +78,39 @@ impl LegoProofJson {
     pub fn from_json_str(s: &str) -> Self {
         serde_json::from_str(s).expect("deserialize LegoProofJson")
     }
+
+    /// Inversa de `from_proof`: reconstruye la `ProofWithLink` arkworks desde los
+    /// decimales. Devuelve `None` si algun campo no parsea (entrada de un peer
+    /// potencialmente malicioso: NO debe hacer panic, solo fallar la verificacion).
+    pub fn to_proof(&self) -> Option<ProofWithLink<Bn254>> {
+        Some(ProofWithLink {
+            groth16_proof: Proof {
+                a: g1_from(&self.a)?,
+                b: g2_from(&self.b)?,
+                c: g1_from(&self.c)?,
+                d: g1_from(&self.d)?,
+            },
+            link_d: g1_from(&self.link_d)?,
+            link_pi: g1_from(&self.link_pi)?,
+        })
+    }
+
+    /// Los public inputs del circuito (sin el `1` inicial) parseados a `Fr`.
+    /// `None` si alguno no es un decimal valido.
+    pub fn public_inputs(&self) -> Option<Vec<Fr>> {
+        self.pubs.iter().map(|s| Fr::from_str(s).ok()).collect()
+    }
+}
+
+fn g1_from(j: &G1Json) -> Option<G1Affine> {
+    let x = Fq::from_str(&j.x).ok()?;
+    let y = Fq::from_str(&j.y).ok()?;
+    Some(G1Affine::new_unchecked(x, y))
+}
+
+fn g2_from(j: &G2Json) -> Option<G2Affine> {
+    // EIP-197: parte imaginaria primero en el JSON; ark Fq2 = {c0 real, c1 imag}.
+    let x = Fq2::new(Fq::from_str(&j.x_c0).ok()?, Fq::from_str(&j.x_c1).ok()?);
+    let y = Fq2::new(Fq::from_str(&j.y_c0).ok()?, Fq::from_str(&j.y_c1).ok()?);
+    Some(G2Affine::new_unchecked(x, y))
 }
