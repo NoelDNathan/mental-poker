@@ -229,12 +229,22 @@ Mapeo desde los args de `shuffle_and_remask2` (barnett-smart-card-protocol,
   (mapping) y permutaba dentro; el lego recibe el resultado permutado.
 - NO pasar `r_prime` (escalar) ni `permutations`.
 
-Pasos 3.4b (solo verificable en navegador):
-1. `shuffle_and_remask2_lego` en barnett-smart: construir el `serde_json::Value`
-   con el mapeo de arriba y llamar `zk_reshuffle::lego::prove_shuffle_lego_embedded`.
-   Devuelve `LegoProofJson` (+verified). Reshuffle análogo en
-   `card_cancellation_lego` (input ya inspeccionado: r_prime_G/H, sk, pk, H, G,
-   Ca1/2_player, Cb1/2_player, m, Ca, Cb; sin FS).
+Pasos 3.4b:
+1. [HECHO, 2026-06-19] `shuffle_and_remask2_lego` + `remask_for_reshuffle_lego`
+   en barnett-smart (trait + impl `DLCards`). Construyen el `serde_json::Value`
+   con el mapeo de arriba y delegan en `zk_reshuffle::lego::prove_*_lego_embedded`.
+   Devuelven `zk_reshuffle::lego::ProveOutput` (`LegoProofJson` + verified).
+   - `zk-reshuffle` re-exporta `ProveOutput`/`LegoProofJson` (frontera de strings).
+   - Cargo.toml raíz: `exclude = ["lego-prover"]` (resuelve "multiple workspace
+     roots" al construir barnett→zk-reshuffle→lego-prover; lego-prover declara su
+     propio `[workspace]` para aislar ark 0.4).
+   - GATE NATIVO verde: `tests/lego_shuffle.rs` monta un mazo babyjubjub real de
+     52 cartas + permutación + r' y exige que la proof lego AUTO-VERIFIQUE (422
+     publics). Valida el mapeo game-state→input, no solo el type-check.
+   - Reshuffle (`card_cancellation_lego`): compila; campos cruzados contra el
+     fixture real. Su self-verify nativo NO se hizo porque el circuito exige
+     inputs CONSISTENTES de estado de juego real (sk/pk/m relacionados, no
+     aleatorios) → se valida en navegador (misma tubería que el shuffle).
 2. handle_poker_messages.rs (~L2055 shuffle, ~L2700 reshuffle): llamar al nuevo
    método, serializar el `LegoProofJson` bundle y enviarlo reusando
    `ZKProofShuffleChunk/Proof` y `ZKProofRemoveAndRemask*`. Cada peer deserializa
