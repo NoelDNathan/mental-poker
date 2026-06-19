@@ -23,9 +23,12 @@ use legogroth16::{
 
 pub mod circuit;
 pub mod circuits;
+pub mod client;
 pub mod fs;
 pub mod link;
 pub mod proof_json;
+
+pub use client::{prove_reshuffle, prove_shuffle, ProveOutput};
 
 pub use circuit::{CircuitR1cs, ProverCircuit, R1csConstraint};
 pub use circuits::{LegoCircuit, PRECOMPUTE, RESHUFFLE, SHUFFLE};
