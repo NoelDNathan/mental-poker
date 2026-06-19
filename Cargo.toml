@@ -12,3 +12,11 @@ members = [
         "workspace-ark05/circom-witnesscalc",
     #"WebRTC-in-Rust/turn-server"
 ]
+
+# lego-prover (ark 0.4) declara su propio [workspace] para aislar ark 0.4 del
+# resto (ark 0.5/0.3). Lo excluimos aqui para que cargo no lo trate como un
+# segundo "workspace root" al resolver el grafo de barnett->zk-reshuffle->lego.
+# Sigue siendo usable como path-dependency.
+exclude = [
+    "lego-prover",
+]

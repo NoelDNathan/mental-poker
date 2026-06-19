@@ -652,6 +652,84 @@ where
         Ok((inputs, proof))
     }
 
+    /// Variante LegoGroth16 de `shuffle_and_remask2` (capa 3.4b). En lugar de
+    /// empujar inputs a un `CircomProver` Groth16, construye el `input.json` del
+    /// circuito `shuffling_multiset_lego` y delega en
+    /// `zk_reshuffle::lego::prove_shuffle_lego_embedded` (que hace la doble pasada
+    /// Fiat-Shamir derivando alpha/beta + el prove cp_link, ya probado nativo).
+    ///
+    /// Mapeo (reverse-engineered de prototype-lego-circuits.mjs):
+    /// - publicos `G,H,Ca[104],Cb[104]` (alpha/beta NO los fija el caller: el
+    ///   prover los deriva en la 1a pasada y los reinyecta);
+    /// - privados `r_prime_G[104]/r_prime_H[104]` (= r'_i.G / r'_i.H, lo mismo que
+    ///   hoy) y `perm_Ca[104]/perm_Cb[104]` (= la permutacion YA aplicada a Ca/Cb;
+    ///   el circuito lego recibe el resultado permutado, no el mapping).
+    #[allow(non_snake_case)]
+    fn shuffle_and_remask2_lego(
+        permutation: &Permutation,
+        r_prime: &Vec<Self::Scalar>,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        deck: &Vec<Self::MaskedCard>,
+        link_v_seed: u64,
+    ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError> {
+        let H = shared_key;
+        let H_str = Self::to_hex(H.into_projective());
+        let G = pp.enc_parameters.generator;
+        let G_str = Self::to_hex(G.into_projective());
+
+        // Ca/Cb del mazo de entrada (mismas componentes que shuffle_and_remask2).
+        let (Ca, Cb): (Vec<_>, Vec<_>) = deck
+            .iter()
+            .map(|masked_card| (masked_card.0, masked_card.1))
+            .unzip();
+
+        // perm_Ca[pos] = Ca[pi(pos)] (permute_array): la permutacion ya aplicada,
+        // que es lo que recibe el circuito lego (el viejo pasaba el mapping).
+        let perm_Ca = permutation.permute_array(&Ca);
+        let perm_Cb = permutation.permute_array(&Cb);
+
+        // Aplana puntos afines a [x0,y0,x1,y1,...] en decimal.
+        let flatten = |pts: &Vec<C::Affine>| -> Vec<String> {
+            let mut out = Vec::with_capacity(pts.len() * 2);
+            for p in pts {
+                let c = Self::to_hex(p.into_projective());
+                out.push(c[0].to_string());
+                out.push(c[1].to_string());
+            }
+            out
+        };
+
+        // r'_i.G y r'_i.H (remask posicional), identico a shuffle_and_remask2.
+        let mut r_prime_G = Vec::with_capacity(104);
+        let mut r_prime_H = Vec::with_capacity(104);
+        for r in r_prime.iter().take(52) {
+            let g = Self::to_hex(G.mul(*r));
+            let h = Self::to_hex(H.mul(*r));
+            r_prime_G.push(g[0].to_string());
+            r_prime_G.push(g[1].to_string());
+            r_prime_H.push(h[0].to_string());
+            r_prime_H.push(h[1].to_string());
+        }
+
+        let input = serde_json::json!({
+            "G": [G_str[0].to_string(), G_str[1].to_string()],
+            "H": [H_str[0].to_string(), H_str[1].to_string()],
+            "Ca": flatten(&Ca),
+            "Cb": flatten(&Cb),
+            "r_prime_G": r_prime_G,
+            "r_prime_H": r_prime_H,
+            "perm_Ca": flatten(&perm_Ca),
+            "perm_Cb": flatten(&perm_Cb),
+            // alpha/beta los sobrescribe el prover en la doble pasada FS.
+            "alpha": "0",
+            "beta": "0",
+        });
+
+        zk_reshuffle::lego::prove_shuffle_lego_embedded(&input, link_v_seed)
+            .map_err(|e| CardProtocolError::Other(format!("{}", e)))
+    }
+
     #[allow(non_snake_case)]
     fn verify_shuffle_remask2(
         verifier: &mut CircomProver,

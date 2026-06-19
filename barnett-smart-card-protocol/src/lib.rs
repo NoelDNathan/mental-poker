@@ -231,6 +231,19 @@ pub trait BarnettSmartProtocol {
         proof: Self::ZKProofGroth16,
     ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>;
 
+    /// Variante LegoGroth16 de `shuffle_and_remask2` (capa 3.4b). Construye el
+    /// `input.json` del circuito `shuffling_multiset_lego` y delega en
+    /// `zk_reshuffle::lego::prove_shuffle_lego_embedded` (doble pasada FS + prove
+    /// cp_link). Devuelve la proof lego serializable + su self-check.
+    fn shuffle_and_remask2_lego(
+        permutation: &Permutation,
+        r_prime: &Vec<Self::Scalar>,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        deck: &Vec<Self::MaskedCard>,
+        link_v_seed: u64,
+    ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError>;
+
 
     fn parse_and_convert_to_decimal(input: &str) -> BigUint;
 
