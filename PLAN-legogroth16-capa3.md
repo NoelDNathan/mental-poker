@@ -245,11 +245,30 @@ Pasos 3.4b:
      fixture real. Su self-verify nativo NO se hizo porque el circuito exige
      inputs CONSISTENTES de estado de juego real (sk/pk/m relacionados, no
      aleatorios) → se valida en navegador (misma tubería que el shuffle).
-2. handle_poker_messages.rs (~L2055 shuffle, ~L2700 reshuffle): llamar al nuevo
-   método, serializar el `LegoProofJson` bundle y enviarlo reusando
-   `ZKProofShuffleChunk/Proof` y `ZKProofRemoveAndRemask*`. Cada peer deserializa
-   y verifica (adaptar `verify_shuffle_remask2` al formato lego).
+2. [PARCIAL — verifier-side HECHO y gateado nativo, 2026-06-19] Verificación P2P:
+   - `lego-prover`: `LegoProofJson::to_proof()` + `verify_{shuffle,reshuffle}_lego`
+     (cp_link + re-derivación FS para el shuffle; bool sin panic). Gate
+     `tests/verify_lego.rs`: prove→JSON→verify y rechazo de tamper.
+   - `barnett-smart`: `verify_shuffle_remask2_lego(pp, shared_key, previous_deck,
+     proof)` verifica el bundle y RECONSTRUYE el mazo resultante desde Ca_out/Cb_out
+     (mismo contrato que `verify_shuffle_remask2`). Gate en `tests/lego_shuffle.rs`:
+     round-trip prover→verifier→52 cartas + tamper rechazado.
+   - PENDIENTE (navegador, wasm_client es wasm32, no type-checkeable en host): el
+     GLUE en handle_poker_messages.rs — sustituir las llamadas
+     `shuffle_and_remask2`/`remask_for_reshuffle` por las _lego, serializar el
+     `LegoProofJson` (`to_json_string`) y enviarlo reusando `ZKProofShuffleProof`/
+     `ZKProofRemoveAndRemaskProof` (el bundle YA lleva los pubs dentro → no hacen
+     falta los chunks de `public` separados), y en recepción
+     (`handle_zk_proof_shuffle_proof_received` ~L1749) deserializar y llamar
+     `verify_shuffle_remask2_lego`.
+   - DECISIÓN PARA EL USUARIO (capa 4): el callback JS `verify_shuffling`
+     (handle_poker_messages ~L2178, vía `format_proof_for_js`) alimenta al frontend
+     para la tx on-chain. Con lego debe pasar el `LegoLink + pubs` (ABI nueva de
+     capa 2), NO el Groth16. Cambiarlo acopla wasm_client↔frontend → hacerlo junto
+     a capa 4.
 3. Pool de precompute en background al entrar a la sala (PK 20 MB load-on-demand).
+   El bundle confirmado es {precompute, residual, link_d, link_pi, pubs}; hoy solo
+   se genera el residual.
 4. 3.5 build wasm-pack multihilo; 3.6 medir.
 
 ## Capa 4 (depende de la 3)
