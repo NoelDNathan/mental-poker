@@ -138,8 +138,12 @@ El reshuffle NO necesita esto (remask posicional).
   portar `ProverCircuit`. Gate: proof generada en el cliente verifica nativa.
 - [ ] **3.4** Integrar en `wasm_client`: sustituir `prover_shuffle`/`reshuffle`
   por el flujo lego; pool de precompute (generar la precompute en background al
-  entrar en la sala, guardar su `LegoProofJson`). Mensajes WebRTC: la proof que
-  viaja ahora es el `LegoLink` + pubs, no un Groth16 plano.
+  entrar en la sala, guardar su `LegoProofJson` cacheada localmente). Mensajes
+  WebRTC: un único bundle por turno `{precomputeProof, residualProof, link_d,
+  link_pi, pubs}` reutilizando `ZKProofShuffleChunk/Proof` y
+  `ZKProofRemoveAndRemaskChunk/Proof` (sin canal nuevo para la precompute, ver
+  "DECISIÓN CONFIRMADA"). Cada peer verifica el bundle completo (ZK) al
+  recibirlo.
 - [ ] **3.5** Build: `lego-prover` debe compilar a wasm32 (ark 0.4 con
   `default-features=false` + parallel en ark-ec/ff/poly, NO la feature `circom`
   de legogroth16 que arrastra wasmer — lección del lab, ver
@@ -157,6 +161,86 @@ El reshuffle NO necesita esto (remask posicional).
   `include_bytes!` si el bundle crece demasiado.
 - Confirmar con el usuario el formato exacto de los mensajes WebRTC nuevos
   (ProtocolMessage) — afecta a shared-protocol y al frontend (capa 4).
+
+## DECISIÓN CONFIRMADA — filosofía del protocolo (2026-06-12)
+
+Camino feliz **optimista on-chain** + **verificación ZK fuerte entre pares en
+P2P** (se mantiene, no se sustituye por Barnett-Groth nativo por ahora) + la
+cadena solo como **árbitro de disputa**. Confirmado por el usuario.
+
+Reglas concretas para capa 3:
+
+1. **P2P — un único bundle lego por barajado/remask**:
+   `{precomputeProof, residualProof, link_d, link_pi, pubs/mazo resultante}`.
+   La precompute se genera en background pero NO viaja por canal
+   independiente — se envía junto con la residual cuando el jugador
+   demuestra su movimiento. Sin canal `ZKProofPrecomputeChunk/Proof` separado.
+   Cada peer verifica el bundle completo (ZK) igual que hoy con
+   `verify_shuffle_remask2`, adaptado al formato lego.
+
+2. **On-chain — camino feliz optimista (NUEVO, fuera del alcance de capa 2)**:
+   publicar mazo resultante + firmas/confirmaciones de los jugadores, SIN
+   verificar ZK. Análogo en espíritu a `setCommunityCardsOptimistic`, pero
+   para el mazo de shuffle/reshuffle. Hoy no existe — es trabajo nuevo en
+   `smartcontracts` (candidato a "capa 5", fuera del alcance de esta sesión
+   de capa 3, pero a tener en cuenta para no romper compatibilidad).
+
+3. **On-chain — camino de disputa (YA CONSTRUIDO en capa 2)**:
+   `submitPrecompute` + `shufflingCards`/`reshufflingCards` (con
+   verificación ZK + enlace `link_d`) = árbitro de disputa. No se tira, no
+   se modifica; su rol pasa de "cada turno" a "solo cuando hay conflicto".
+   El cliente debe mantener cacheadas localmente ambas proofs (precompute +
+   residual) del propio jugador para poder usarlas si surge una disputa,
+   aunque en el camino feliz no se suban a la cadena.
+
+## ESTADO 3.1-3.4a HECHO (sesión 2026-06-19, gates nativos verdes)
+
+El prover lego está completo y verificado nativo. Crate `lego-prover` (ark 0.4
+aislado) + `zk-reshuffle/src/lego.rs` (witness con ark-circom). **ark 0.4 + 0.5
+enlazan en el mismo binario** (validado). **Todo compila SOLO con toolchain
+msvc** (ark-circom/wasmer no enlaza con gnu por dlltool).
+
+Entry points listos para el wasm_client (zk-reshuffle, ya probados):
+- `lego::prove_shuffle_lego_embedded(input: &Value, link_v_seed) -> ProveOutput`
+  (doble pasada FS interna; `input` = el `input.json` del shuffle).
+- `lego::prove_reshuffle_lego_embedded(input: &Value, link_v_seed) -> ProveOutput`.
+- `ProveOutput { proof: LegoProofJson, verified: bool }`. LegoProofJson =
+  `{a,b,c,d,link_d,link_pi,pubs}` en decimales (G2 orden EIP-197).
+
+## 3.4b — construcción del input lego (REVERSE-ENGINEERED, listo para ejecutar)
+
+El input del circuito `shuffling_multiset_lego` (de `prototype-lego-circuits.mjs`):
+- Públicos: `G, H` (2 coords c/u), `Ca[104], Cb[104]` (52 cartas × 2 coords),
+  `alpha, beta` (FS, los deriva el prover en la doble pasada — NO ponerlos).
+- Privados: `r_prime_G[104], r_prime_H[104]`, `perm_Ca[104], perm_Cb[104]`.
+- Lógica: `Ca_out[i] = perm_Ca[i] + r_prime_G[i]`, `Cb_out[i] = perm_Cb[i] +
+  r_prime_H[i]` (remask posicional); multiset check `prod(alpha - cIn) ==
+  prod(alpha - cMid)` con cIn de (Ca,Cb) y cMid de (perm_Ca,perm_Cb) prueba que
+  perm_* es permutación de (Ca,Cb).
+
+Mapeo desde los args de `shuffle_and_remask2` (barnett-smart-card-protocol,
+`discrete_log_cards/mod.rs:562`), que YA computa casi todo:
+- `G, H`: `pp.enc_parameters.generator`, `shared_key` → `to_hex` (igual que hoy).
+- `Ca, Cb`: del `deck` (igual que hoy, `Ca_list`/`Cb_list`).
+- `r_prime_G[i] = r'_i·G`, `r_prime_H[i] = r'_i·H`: YA se calculan hoy como
+  `r_prime_G_precomputed`/`r_prime_H_precomputed`.
+- `perm_Ca`/`perm_Cb`: NUEVO — aplicar la `permutation` a las listas Ca/Cb
+  (`perm_Ca[pos] = Ca[π(pos)]`). El circuito viejo pasaba `permutations`
+  (mapping) y permutaba dentro; el lego recibe el resultado permutado.
+- NO pasar `r_prime` (escalar) ni `permutations`.
+
+Pasos 3.4b (solo verificable en navegador):
+1. `shuffle_and_remask2_lego` en barnett-smart: construir el `serde_json::Value`
+   con el mapeo de arriba y llamar `zk_reshuffle::lego::prove_shuffle_lego_embedded`.
+   Devuelve `LegoProofJson` (+verified). Reshuffle análogo en
+   `card_cancellation_lego` (input ya inspeccionado: r_prime_G/H, sk, pk, H, G,
+   Ca1/2_player, Cb1/2_player, m, Ca, Cb; sin FS).
+2. handle_poker_messages.rs (~L2055 shuffle, ~L2700 reshuffle): llamar al nuevo
+   método, serializar el `LegoProofJson` bundle y enviarlo reusando
+   `ZKProofShuffleChunk/Proof` y `ZKProofRemoveAndRemask*`. Cada peer deserializa
+   y verifica (adaptar `verify_shuffle_remask2` al formato lego).
+3. Pool de precompute en background al entrar a la sala (PK 20 MB load-on-demand).
+4. 3.5 build wasm-pack multihilo; 3.6 medir.
 
 ## Capa 4 (depende de la 3)
 
