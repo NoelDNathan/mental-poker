@@ -730,6 +730,100 @@ where
             .map_err(|e| CardProtocolError::Other(format!("{}", e)))
     }
 
+    /// Variante LegoGroth16 de `remask_for_reshuffle` (capa 3.4b). Mismo mapeo de
+    /// inputs que `remask_for_reshuffle` salvo que el circuito lego
+    /// (`card_cancellation_lego`) NO recibe el escalar `r_prime` (solo los puntos
+    /// `r_prime_G/H`) y no hay Fiat-Shamir: una sola pasada de witness.
+    #[allow(non_snake_case)]
+    fn remask_for_reshuffle_lego(
+        r_prime: &Vec<Self::Scalar>,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        deck: &Vec<Self::MaskedCard>,
+        player_cards: &Vec<Option<Self::MaskedCard>>,
+        sk: &Self::PlayerSecretKey,
+        pk: &Self::PlayerPublicKey,
+        m_list: &Vec<Self::Card>,
+        link_v_seed: u64,
+    ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError> {
+        if player_cards.iter().any(|card| card.is_none()) {
+            return Err(CardProtocolError::Other(
+                "Player cards cannot be None".to_string(),
+            ));
+        }
+        let player_cards = player_cards
+            .iter()
+            .map(|card| card.unwrap())
+            .collect::<Vec<_>>();
+
+        let H = shared_key;
+        let H_str = Self::to_hex(H.into_projective());
+        let G = pp.enc_parameters.generator;
+        let G_str = Self::to_hex(G.into_projective());
+
+        let (Ca, Cb): (Vec<_>, Vec<_>) = deck
+            .iter()
+            .map(|masked_card| (masked_card.0, masked_card.1))
+            .unzip();
+
+        // Aplana puntos afines a [x0,y0,x1,y1,...] en decimal.
+        let flatten = |pts: &Vec<C::Affine>| -> Vec<String> {
+            let mut out = Vec::with_capacity(pts.len() * 2);
+            for p in pts {
+                let c = Self::to_hex(p.into_projective());
+                out.push(c[0].to_string());
+                out.push(c[1].to_string());
+            }
+            out
+        };
+
+        // r'_i.G y r'_i.H (sin el escalar r_prime, que el circuito lego no usa).
+        let mut r_prime_G = Vec::with_capacity(104);
+        let mut r_prime_H = Vec::with_capacity(104);
+        for r in r_prime.iter().take(52) {
+            let g = Self::to_hex(G.mul(*r));
+            let h = Self::to_hex(H.mul(*r));
+            r_prime_G.push(g[0].to_string());
+            r_prime_G.push(g[1].to_string());
+            r_prime_H.push(h[0].to_string());
+            r_prime_H.push(h[1].to_string());
+        }
+
+        // m[]: 52 cartas (m.0) aplanadas a coords.
+        let mut m_flat = Vec::with_capacity(104);
+        for m in m_list {
+            let c = Self::to_hex(m.0.into_projective());
+            m_flat.push(c[0].to_string());
+            m_flat.push(c[1].to_string());
+        }
+
+        let pt2 = |p: <C as ProjectiveCurve>::Affine| -> Vec<String> {
+            let c = Self::to_hex(p.into_projective());
+            vec![c[0].to_string(), c[1].to_string()]
+        };
+        let pk_str = Self::to_hex(pk.into_projective());
+        let sk_dec = Self::parse_and_convert_to_decimal(&sk.to_string()).to_string();
+
+        let input = serde_json::json!({
+            "r_prime_G": r_prime_G,
+            "r_prime_H": r_prime_H,
+            "sk": sk_dec,
+            "pk": [pk_str[0].to_string(), pk_str[1].to_string()],
+            "H": [H_str[0].to_string(), H_str[1].to_string()],
+            "G": [G_str[0].to_string(), G_str[1].to_string()],
+            "Ca1_player": pt2(player_cards[0].0),
+            "Cb1_player": pt2(player_cards[0].1),
+            "Ca2_player": pt2(player_cards[1].0),
+            "Cb2_player": pt2(player_cards[1].1),
+            "m": m_flat,
+            "Ca": flatten(&Ca),
+            "Cb": flatten(&Cb),
+        });
+
+        zk_reshuffle::lego::prove_reshuffle_lego_embedded(&input, link_v_seed)
+            .map_err(|e| CardProtocolError::Other(format!("{}", e)))
+    }
+
     #[allow(non_snake_case)]
     fn verify_shuffle_remask2(
         verifier: &mut CircomProver,

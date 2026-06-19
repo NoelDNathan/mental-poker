@@ -244,6 +244,22 @@ pub trait BarnettSmartProtocol {
         link_v_seed: u64,
     ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError>;
 
+    /// Variante LegoGroth16 de `remask_for_reshuffle` (capa 3.4b). Construye el
+    /// `input.json` del circuito `card_cancellation_lego` (sin Fiat-Shamir: una
+    /// sola pasada de witness) y delega en
+    /// `zk_reshuffle::lego::prove_reshuffle_lego_embedded`.
+    fn remask_for_reshuffle_lego(
+        r_prime: &Vec<Self::Scalar>,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        deck: &Vec<Self::MaskedCard>,
+        player_cards: &Vec<Option<Self::MaskedCard>>,
+        sk: &Self::PlayerSecretKey,
+        pk: &Self::PlayerPublicKey,
+        m_list: &Vec<Self::Card>,
+        link_v_seed: u64,
+    ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError>;
+
 
     fn parse_and_convert_to_decimal(input: &str) -> BigUint;
 
