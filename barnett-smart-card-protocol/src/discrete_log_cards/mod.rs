@@ -1034,6 +1034,161 @@ where
         Ok(masked_cards)
     }
 
+    /// Verificacion P2P del bundle lego del reshuffle/cancellation (capa 3.4b).
+    /// Mismo contrato que `verify_reshuffle_remask` pero partiendo de un
+    /// `LegoProofJson`. Sin Fiat-Shamir (remask posicional): solo cp_link.
+    #[allow(non_snake_case)]
+    fn verify_reshuffle_remask_lego(
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        previous_deck: &Vec<Self::MaskedCard>,
+        player_cards: &Vec<Self::MaskedCard>,
+        pk: &Self::PlayerPublicKey,
+        m_list: &Vec<Self::Card>,
+        proof: &zk_reshuffle::lego::LegoProofJson,
+    ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>
+    where
+        C: ProjectiveCurve,
+        C::Affine: HasCoordinates + GeneratePoints<C>,
+    {
+        // 1. Verificacion ZK del bundle (cp_link contra la vk embebida).
+        if !zk_reshuffle::lego::verify_reshuffle_lego(proof) {
+            return Err(CardProtocolError::Other(
+                "proof lego del reshuffle no verifica".to_string(),
+            ));
+        }
+
+        // 2. Public inputs (decimales) -> BigUint. Layout (= verify_reshuffle_remask):
+        // pk_computed[2] || Ca_out[104] || Cb_out[104] || pk_input[2] || H[2] || G[2]
+        // || Ca1_player[2] || Cb1_player[2] || Ca2_player[2] || Cb2_player[2]
+        // || m[104] || Ca[104] || Cb[104] = 536.
+        let pubs: Vec<BigUint> = proof
+            .pubs
+            .iter()
+            .map(|s| {
+                BigUint::parse_bytes(s.as_bytes(), 10)
+                    .ok_or_else(|| CardProtocolError::Other(format!("pub no decimal: {s}")))
+            })
+            .collect::<Result<_, _>>()?;
+        if pubs.len() < 536 {
+            return Err(CardProtocolError::Other(format!(
+                "bundle lego con {} publics, se esperaban >=536",
+                pubs.len()
+            )));
+        }
+        let pk_computed = &pubs[0..2];
+        let Ca_out = &pubs[2..106];
+        let Cb_out = &pubs[106..210];
+        let pk_input = &pubs[210..212];
+        let H = &pubs[212..214];
+        let G = &pubs[214..216];
+        let Ca1_player = &pubs[216..218];
+        let Cb1_player = &pubs[218..220];
+        let Ca2_player = &pubs[220..222];
+        let Cb2_player = &pubs[222..224];
+        let m = &pubs[224..328];
+        let Ca = &pubs[328..432];
+        let Cb = &pubs[432..536];
+
+        // 3. pk_computed (derivado de sk en el circuito) == pk_input == pk dado.
+        let pk_coords = Self::to_hex(pk.into_projective());
+        if pk_computed[0] != pk_input[0] || pk_computed[1] != pk_input[1] {
+            return Err(CardProtocolError::Other(
+                "pk calculada no coincide con pk de entrada".to_string(),
+            ));
+        }
+        if pk_coords[0] != pk_input[0] || pk_coords[1] != pk_input[1] {
+            return Err(CardProtocolError::Other(
+                "pk de entrada no coincide con la pk proporcionada".to_string(),
+            ));
+        }
+
+        // 4. H == shared_key, G == generador.
+        let shared_key_coords = Self::to_hex(shared_key.into_projective());
+        if shared_key_coords[0] != H[0] || shared_key_coords[1] != H[1] {
+            return Err(CardProtocolError::Other(
+                "H no coincide con shared_key".to_string(),
+            ));
+        }
+        let generator_coords = Self::to_hex(pp.enc_parameters.generator.into_projective());
+        if generator_coords[0] != G[0] || generator_coords[1] != G[1] {
+            return Err(CardProtocolError::Other(
+                "G no coincide con el generador".to_string(),
+            ));
+        }
+
+        // 5. Las 2 cartas del jugador coinciden con las del bundle.
+        if player_cards.len() != 2 {
+            return Err(CardProtocolError::Other(
+                "Se esperaban exactamente 2 cartas de jugador".to_string(),
+            ));
+        }
+        let card1_ca = Self::to_hex(player_cards[0].0.into_projective());
+        let card1_cb = Self::to_hex(player_cards[0].1.into_projective());
+        if card1_ca[0] != Ca1_player[0]
+            || card1_ca[1] != Ca1_player[1]
+            || card1_cb[0] != Cb1_player[0]
+            || card1_cb[1] != Cb1_player[1]
+        {
+            return Err(CardProtocolError::Other(
+                "La primera carta del jugador no coincide con el bundle".to_string(),
+            ));
+        }
+        let card2_ca = Self::to_hex(player_cards[1].0.into_projective());
+        let card2_cb = Self::to_hex(player_cards[1].1.into_projective());
+        if card2_ca[0] != Ca2_player[0]
+            || card2_ca[1] != Ca2_player[1]
+            || card2_cb[0] != Cb2_player[0]
+            || card2_cb[1] != Cb2_player[1]
+        {
+            return Err(CardProtocolError::Other(
+                "La segunda carta del jugador no coincide con el bundle".to_string(),
+            ));
+        }
+
+        // 6. Ca/Cb del bundle == previous_deck (el mazo que el peer ya tiene).
+        let (original_Ca, original_Cb): (Vec<_>, Vec<_>) = previous_deck
+            .iter()
+            .map(|masked_card| (masked_card.0, masked_card.1))
+            .unzip();
+        for i in 0..52 {
+            let ca_coords = Self::to_hex(original_Ca[i].into_projective());
+            let cb_coords = Self::to_hex(original_Cb[i].into_projective());
+            if ca_coords[0] != Ca[i * 2]
+                || ca_coords[1] != Ca[i * 2 + 1]
+                || cb_coords[0] != Cb[i * 2]
+                || cb_coords[1] != Cb[i * 2 + 1]
+            {
+                return Err(CardProtocolError::Other(format!(
+                    "Ca/Cb del bundle no coinciden con previous_deck en la posicion {i}"
+                )));
+            }
+        }
+
+        // 7. m del bundle == m_list (las 52 cartas en claro de la baraja).
+        for i in 0..m_list.len() {
+            let m_coords = Self::to_hex(m_list[i].0.into_projective());
+            if m_coords[0] != m[i * 2] || m_coords[1] != m[i * 2 + 1] {
+                return Err(CardProtocolError::Other(format!(
+                    "m del bundle no coincide con m_list en la posicion {i}"
+                )));
+            }
+        }
+
+        // 8. Reconstruye el mazo resultante desde Ca_out/Cb_out.
+        let mut masked_cards: Vec<Self::MaskedCard> = Vec::with_capacity(52);
+        for i in 0..52 {
+            let cax = Fq::from(Ca_out[i * 2].clone());
+            let cay = Fq::from(Ca_out[i * 2 + 1].clone());
+            let cbx = Fq::from(Cb_out[i * 2].clone());
+            let cby = Fq::from(Cb_out[i * 2 + 1].clone());
+            let ca = C::Affine::new(cax, cay);
+            let cb = C::Affine::new(cbx, cby);
+            masked_cards.push(el_gamal::Ciphertext(ca, cb));
+        }
+        Ok(masked_cards)
+    }
+
     fn parse_and_convert_to_decimal(input: &str) -> BigUint {
         // Extraer el número hexadecimal entre paréntesis usando expresiones regulares
         let re = regex::Regex::new(r"\(([0-9A-Fa-f]+)\)").unwrap();

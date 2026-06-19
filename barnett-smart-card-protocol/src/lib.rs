@@ -300,4 +300,19 @@ pub trait BarnettSmartProtocol {
         public: Vec<Fr>,
         proof: Self::ZKProofGroth16,
     ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>;
+
+    /// Verificacion P2P del bundle lego del reshuffle/cancellation (capa 3.4b).
+    /// Mismo contrato que `verify_reshuffle_remask` (devuelve el mazo resultante y
+    /// comprueba pk/H/G/player_cards/m/Ca/Cb contra el estado) pero partiendo de un
+    /// `LegoProofJson` (lo que llega por WebRTC) en vez de `(public, proof)`. Sin
+    /// Fiat-Shamir (remask posicional): solo cp_link.
+    fn verify_reshuffle_remask_lego(
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        previous_deck: &Vec<Self::MaskedCard>,
+        player_cards: &Vec<Self::MaskedCard>,
+        pk: &Self::PlayerPublicKey,
+        m_list: &Vec<Self::Card>,
+        proof: &zk_reshuffle::lego::LegoProofJson,
+    ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>;
 }

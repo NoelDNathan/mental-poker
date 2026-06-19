@@ -253,14 +253,43 @@ Pasos 3.4b:
      proof)` verifica el bundle y RECONSTRUYE el mazo resultante desde Ca_out/Cb_out
      (mismo contrato que `verify_shuffle_remask2`). Gate en `tests/lego_shuffle.rs`:
      round-trip prover→verifier→52 cartas + tamper rechazado.
-   - PENDIENTE (navegador, wasm_client es wasm32, no type-checkeable en host): el
-     GLUE en handle_poker_messages.rs — sustituir las llamadas
-     `shuffle_and_remask2`/`remask_for_reshuffle` por las _lego, serializar el
-     `LegoProofJson` (`to_json_string`) y enviarlo reusando `ZKProofShuffleProof`/
-     `ZKProofRemoveAndRemaskProof` (el bundle YA lleva los pubs dentro → no hacen
-     falta los chunks de `public` separados), y en recepción
-     (`handle_zk_proof_shuffle_proof_received` ~L1749) deserializar y llamar
-     `verify_shuffle_remask2_lego`.
+   - [HECHO shuffle, 2026-06-19] GLUE del SHUFFLE en handle_poker_messages.rs,
+     type-checkeado verde a wasm32 (`cargo +stable-msvc check --target
+     wasm32-unknown-unknown -p wasm_client`, exit 0):
+     * envío (`shuffle_remask_and_send`): `shuffle_and_remask2` →
+       `shuffle_and_remask2_lego`; `link_v_seed` aleatorio por ahora (TODO pool
+       precompute); self-verify; `to_json_string` → `ZKProofShuffleProof`. Se
+       ELIMINÓ el troceado en `ZKProofShuffleChunk` (los pubs viajan dentro del
+       bundle). Reconstrucción local con `verify_shuffle_remask2_lego`.
+     * recepción (`handle_zk_proof_shuffle_proof_received`): marca
+       `is_all_public_shuffle_bytes_received = true` (ya no llegan chunks) y
+       dispara la verificación.
+     * verificación (`process_shuffle_verification_body`): deserializa
+       `LegoProofJson` sin panic (peer no confiable) + `verify_shuffle_remask2_lego`.
+   - [HECHO reshuffle, 2026-06-19] VERIFICADOR NATIVO `verify_reshuffle_remask_lego`
+     en barnett (trait lib.rs + impl discrete_log_cards/mod.rs). Mismo contrato que
+     `verify_reshuffle_remask` clásico (comprueba pk_computed==pk_input==pk, H==
+     shared_key, G==generador, las 2 cartas del jugador, m==m_list, Ca/Cb==
+     previous_deck, y reconstruye el mazo desde Ca_out/Cb_out) pero desde un
+     `LegoProofJson`; ZK vía `zk_reshuffle::lego::verify_reshuffle_lego` (cp_link,
+     sin Fiat-Shamir). Layout de los 536 pubs (= verify_reshuffle_remask):
+     pk_computed[2]||Ca_out[104]||Cb_out[104]||pk_input[2]||H[2]||G[2]||
+     Ca1_player[2]||Cb1_player[2]||Ca2_player[2]||Cb2_player[2]||m[104]||Ca[104]||Cb[104].
+     GATE NATIVO VERDE (release, 1.05s) `tests/lego_reshuffle.rs`: round-trip
+     `remask_for_reshuffle_lego`→`verify_reshuffle_remask_lego` con mazo babyjubjub
+     real → 52 cartas + tamper rechazado. CLAVE: la restricción dura del circuito
+     `pk==BabyPbk(sk)` (base BASE8) se cumple porque `prime_subgroup_generator()`
+     de este babyjubjub ES BASE8; las comprobaciones de m/cartas NO imponen
+     igualdad dura (solo condicionan outputs) → un mazo válido cualquiera prueba.
+   - [HECHO reshuffle, 2026-06-19] GLUE del RESHUFFLE en handle_poker_messages.rs,
+     type-check wasm32 verde:
+     * envío (`send_remask_for_reshuffle`): `remask_for_reshuffle`→`_lego`; devuelve
+       el `LegoProofJson` y lo manda en `ZKProofRemoveAndRemaskProof` (sin chunks).
+     * recepción (`handle_zk_proof_remove_and_remask_proof_received`): marca
+       `is_all_public_reshuffle_bytes_received=true` y procesa.
+     * `verify_remask_for_reshuffle`: deserializa el `LegoProofJson` sin panic +
+       `verify_reshuffle_remask_lego`.
+     * self-verify local en `process_reshuffle_verification` adaptado a `_lego`.
    - DECISIÓN PARA EL USUARIO (capa 4): el callback JS `verify_shuffling`
      (handle_poker_messages ~L2178, vía `format_proof_for_js`) alimenta al frontend
      para la tx on-chain. Con lego debe pasar el `LegoLink + pubs` (ABI nueva de
