@@ -12,8 +12,11 @@ Reusa el codigo ya probado del lab
 
 ## Estado (capa 3 del PLAN-legogroth16-capa3.md)
 
-- [x] **3.1** Maquinaria comun + circuito residual (shuffle). Gate: el `link_d`
-  reproduce bit a bit el del lab (`tests/link_d_repro.rs`).
+- [x] **3.1** Maquinaria comun + los TRES circuitos (shuffle, reshuffle,
+  precompute). Gates: el `link_d` reproduce bit a bit el del lab
+  (`tests/link_d_repro.rs`); los tres circuitos comparten committed witnesses y
+  `link_d` (`tests/linkage_three_circuits.rs`); prove/verify del shuffle y del
+  reshuffle (`#[ignore]`, release).
 - [x] **3.2** Structs serde (`LegoProofJson`, frontera por bytes/decimales) +
   Fiat-Shamir keccak (`derive_alpha_beta`). Gate: alpha/beta reproducen el
   encoding del verifier Solidity / script del lab (`tests/fs_repro.rs`), y
@@ -24,16 +27,19 @@ Reusa el codigo ya probado del lab
 
 ## Artefactos (`artifacts/`)
 
-Copiados del lab (formato propio sin wasmer):
+Copiados del lab (formato propio sin wasmer; los genera el bin
+`zk-bench/native-provers/legogroth16-poc/src/bin/serialize_lego_artifacts.rs`,
+compilado con el toolchain msvc por wasmer):
 
-- `shuffle_pk.bin` / `shuffle_r1cs.bin`: PK con link + R1CS aplanado del
-  residual `shuffling_multiset_lego`.
-- `shuffle_witness.json`: witness de ejemplo (para el gate).
+- `shuffle_pk.bin` / `shuffle_r1cs.bin` / `shuffle_witness.json`: residual
+  `shuffling_multiset_lego` (con FS).
+- `reshuffle_pk.bin` / `reshuffle_r1cs.bin` / `reshuffle_witness.json`: residual
+  `card_cancellation_lego` (sin FS).
+- `precompute_committed.json`: solo los 208 committed witnesses de
+  `rerandomization_precompute_52_lego` (su witness son ~3.7 MB y su PK ~20 MB:
+  **load-on-demand**, no se embebe). Bastan para el gate de linkage.
 - `shuffle_link_d_expected.json`: el `link_d` que exporto el lab
   (`zk-bench/bench-results/legogroth16/link_d.json`), objetivo del gate.
-
-Faltan los del precompute (`rerandomization_precompute_52_lego`) y reshuffle
-(`card_cancellation_lego`): se anaden en 3.2/3.3.
 
 ## Tests
 
