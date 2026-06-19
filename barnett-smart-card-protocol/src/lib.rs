@@ -272,6 +272,26 @@ pub trait BarnettSmartProtocol {
         link_v_seed: u64,
     ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError>;
 
+    /// Variante LegoGroth16 del PRECOMPUTE del pool (capa 3.4b paso 3). Construye
+    /// el `input.json` del circuito `rerandomization_precompute_52_lego`
+    /// (`{G, H, r_prime_G, r_prime_H, r_prime}`) desde los MISMOS `r_prime` que
+    /// luego consumira el residual del turno, y delega en
+    /// `zk_reshuffle::lego::prove_precompute_lego`. NADA embebido: el circom
+    /// `.wasm`/`.r1cs` y la PK/r1cs lego (~20 MB) llegan por bytes (load-on-demand,
+    /// fetch JS). Con el MISMO `link_v_seed` produce el MISMO `link_d` que el
+    /// residual: ese es el enlace cp_link que hace combinable el pool.
+    #[allow(clippy::too_many_arguments)]
+    fn prove_precompute_lego(
+        r_prime: &Vec<Self::Scalar>,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        link_v_seed: u64,
+        circom_wasm: &[u8],
+        circom_r1cs: &[u8],
+        lego_r1cs: &[u8],
+        lego_pk: &[u8],
+    ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError>;
+
 
     fn parse_and_convert_to_decimal(input: &str) -> BigUint;
 

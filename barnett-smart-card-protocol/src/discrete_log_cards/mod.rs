@@ -824,6 +824,59 @@ where
             .map_err(|e| CardProtocolError::Other(format!("{}", e)))
     }
 
+    /// PRECOMPUTE del pool (`rerandomization_precompute_52_lego`). Mismo mapeo de
+    /// `r_prime_G/H` que el shuffle/reshuffle (remask posicional) MAS el escalar
+    /// `r_prime` (decimales), que este circuito si recibe. Publicos: G, H.
+    #[allow(non_snake_case)]
+    fn prove_precompute_lego(
+        r_prime: &Vec<Self::Scalar>,
+        pp: &Self::Parameters,
+        shared_key: &Self::AggregatePublicKey,
+        link_v_seed: u64,
+        circom_wasm: &[u8],
+        circom_r1cs: &[u8],
+        lego_r1cs: &[u8],
+        lego_pk: &[u8],
+    ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError> {
+        let H = shared_key;
+        let H_str = Self::to_hex(H.into_projective());
+        let G = pp.enc_parameters.generator;
+        let G_str = Self::to_hex(G.into_projective());
+
+        // r'_i.G y r'_i.H (committed witnesses: los MISMOS 208 que el residual,
+        // por eso el link_d enlaza) + el escalar r'_i en decimal.
+        let mut r_prime_G = Vec::with_capacity(104);
+        let mut r_prime_H = Vec::with_capacity(104);
+        let mut r_prime_dec = Vec::with_capacity(52);
+        for r in r_prime.iter().take(52) {
+            let g = Self::to_hex(G.mul(*r));
+            let h = Self::to_hex(H.mul(*r));
+            r_prime_G.push(g[0].to_string());
+            r_prime_G.push(g[1].to_string());
+            r_prime_H.push(h[0].to_string());
+            r_prime_H.push(h[1].to_string());
+            r_prime_dec.push(Self::parse_and_convert_to_decimal(&r.to_string()).to_string());
+        }
+
+        let input = serde_json::json!({
+            "G": [G_str[0].to_string(), G_str[1].to_string()],
+            "H": [H_str[0].to_string(), H_str[1].to_string()],
+            "r_prime_G": r_prime_G,
+            "r_prime_H": r_prime_H,
+            "r_prime": r_prime_dec,
+        });
+
+        zk_reshuffle::lego::prove_precompute_lego(
+            &input,
+            link_v_seed,
+            circom_wasm,
+            circom_r1cs,
+            lego_r1cs,
+            lego_pk,
+        )
+        .map_err(|e| CardProtocolError::Other(format!("{}", e)))
+    }
+
     #[allow(non_snake_case)]
     fn verify_shuffle_remask2(
         verifier: &mut CircomProver,

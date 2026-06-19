@@ -323,16 +323,38 @@ Pasos 3.4b:
         (`verify_precompute_lego`, PK load-on-demand), y `links_match()`. GATE
         rápido verde `lego-prover/tests/bundle.rs` (serde round-trip + link match +
         rechazo de link_d distinto + entrada malformada → None).
-   - PENDIENTE b) (browser-bound, solo type-checkeable a wasm32, no runtime nativo):
-        wasm_client: pool en PokerState {r_prime, link_v_seed, precompute_proof},
-        generación en background al entrar a la sala (fetch de los 4 artefactos por
-        JS: circom wasm + circom r1cs + lego pk + lego r1cs), consumir una entrada
-        por turno pasando su r_prime+link_v_seed a
-        `shuffle_and_remask2_lego`/`remask_for_reshuffle_lego` (hoy usan seed y
-        r_prime aleatorios, TODO marcado en handle_poker_messages ~L2063 y ~L2515),
-        envolver en `LegoBundle` y enviarlo; verificador P2P deserializa el bundle
-        (residual + precompute + links_match).
-4. 3.5 build wasm-pack multihilo; 3.6 medir.
+   - [HECHO b), 2026-06-19/20, type-check wasm32 verde + build wasm-pack verde]:
+        * barnett: `prove_precompute_lego(r_prime, pp, shared_key, link_v_seed,
+          circom_wasm, circom_r1cs, lego_r1cs, lego_pk)` (trait + impl DLCards)
+          construye el input {G,H,r_prime_G,r_prime_H,r_prime} y delega en
+          zk_reshuffle. r_prime escalar→decimal vía parse_and_convert_to_decimal.
+        * wasm_client: PokerState {precompute_pool, precompute_artifacts};
+          wasm_bindgen `set_precompute_artifacts` + `generate_precompute`; la cripto
+          en `build_precompute_entry` (compartida con el fallback en-caliente);
+          consumo por turno con `take_or_make_precompute` (reutiliza r_prime+seed en
+          shuffle/remask _lego); `LegoBundle{precompute,residual}` enviado en el
+          mismo mensaje; verificador `verify_bundle_precompute` (links_match +
+          verify_precompute_lego con PK cacheada). Deserializa sin panic.
+4. 3.5 build wasm-pack multihilo [HECHO 2026-06-20]: `wasm-pack build --target web
+   ... -F rayon` (nightly-2024-12-20, RUSTFLAGS atomics+bulk-memory+getrandom
+   wasm_js) verde; exports presentes; copiado a frontend-production/public/pkg-rayon
+   (wasm ~96 MB, sin cambio relevante de mi parte: la precompute es load-on-demand).
+   3.6 medir [PENDIENTE — navegador real].
+
+### Fontanería del pool en el frontend [HECHO 2026-06-20] (parte de capa 4)
+- `frontend-production/public/precompute/`: los 4 artefactos copiados (gitignored
+  bajo `public`, ~43 MB): precompute_circom.wasm, precompute_circom.r1cs,
+  precompute_pk.bin, precompute_lego.r1cs.
+- `src/services/precompute/PrecomputePool.ts`: `loadPrecomputeArtifacts` (fetch
+  paralelo + `set_precompute_artifacts`, memoizado), `fillPrecomputePool` (llama
+  `generate_precompute` hasta target=2, cede el hilo entre proofs), `preparePool`.
+- `src/hooks/usePokerWasm.ts`: dispara `preparePrecomputePool` en el callback
+  `set_joint_pk` (se invoca para TODOS los jugadores justo al fijarse joint_pk,
+  antes del turno de shuffle) + refill en `resetForNewGame`. `wasm.d.ts` extendido.
+  tsc limpio en los archivos nuevos (los 10 errores de tsc son preexistentes en
+  otros archivos).
+- FALTA de capa 4: el callback `verify_shuffling` debe pasar `LegoLink + pubs`
+  (ABI capa 2) al frontend para las 2 tx on-chain; medición en navegador (3.6).
 
 ## Capa 4 (depende de la 3)
 
