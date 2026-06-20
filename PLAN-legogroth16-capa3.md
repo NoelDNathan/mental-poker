@@ -339,7 +339,14 @@ Pasos 3.4b:
    ... -F rayon` (nightly-2024-12-20, RUSTFLAGS atomics+bulk-memory+getrandom
    wasm_js) verde; exports presentes; copiado a frontend-production/public/pkg-rayon
    (wasm ~96 MB, sin cambio relevante de mi parte: la precompute es load-on-demand).
-   3.6 medir [PENDIENTE — navegador real].
+   3.6 medir [HECHO precompute, 2026-06-20]: bench dev `bench_precompute`
+   (wasm_bindgen) mide la precompute SIN partida real (shared_key = generadora);
+   `window.__benchPrecompute(n)` en el frontend. MEDIDO en navegador (next dev,
+   cloud VM, 8 hilos, crossOriginIsolated=true): **precompute (witness+prove)
+   ~13–16 s** (variable por CPU compartido). Residual: timing añadido (info!
+   "[timing] residual {shuffle,reshuffle} prove"), se ve en una partida real
+   (necesita joint_pk). Nota: el número es alto y depende del entorno; re-medir en
+   máquina dedicada. Fetch de los 4 artefactos (~43 MB): ~0.5 s.
 
 ### Fontanería del pool en el frontend [HECHO 2026-06-20] (parte de capa 4)
 - `frontend-production/public/precompute/`: los 4 artefactos copiados (gitignored
