@@ -44,6 +44,14 @@ parallel = [
     "ark-poly/parallel",
     "ark-std/parallel",
 ]
+# A/B EXPERIMENTAL (solo nativo): enciende ADEMAS el `parallel` del propio
+# legogroth16 -> sus loops cfg_iter! (prover.rs + r1cs_to_qap.rs, construccion
+# a/b/c) pasan a paralelos. Arrastra std -> wasmer-sys: NO compila a wasm32, por
+# eso es solo para medir el "premio" en nativo antes de plantear el vendoring.
+parallel-full = [
+    "parallel",
+    "legogroth16/parallel",
+]
 
 [profile.release]
 opt-level = 3
