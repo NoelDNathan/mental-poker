@@ -16,7 +16,10 @@ use std::path::PathBuf;
 
 use lego_prover::{prove_precompute, prove_reshuffle, verify_precompute_lego};
 
-const LINK_V_SEED: u64 = 0x714B;
+const LINK_V_SEED: [u8; 32] = [
+    0x4b, 0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 1,
+];
 
 fn vendor(file: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -46,7 +49,7 @@ fn precompute_links_to_residual() {
             .join("../../zk-bench/public/artifacts/rerandomization_precompute_52_lego/witness.json"),
     );
 
-    let pre = prove_precompute(&pk_bytes, &r1cs_bytes, &precompute_witness, LINK_V_SEED);
+    let pre = prove_precompute(&pk_bytes, &r1cs_bytes, &precompute_witness, &LINK_V_SEED);
     assert!(pre.verified, "la proof del precompute debe auto-verificar");
     // num_public del precompute = 5 (1 + G[2] + H[2]) -> 4 pubs en el JSON.
     assert_eq!(pre.proof.pubs.len(), 4, "publics del precompute (G,H)");
@@ -55,7 +58,7 @@ fn precompute_links_to_residual() {
     let reshuffle_witness = read_decimals(
         &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("artifacts/reshuffle_witness.json"),
     );
-    let res = prove_reshuffle(&reshuffle_witness, LINK_V_SEED);
+    let res = prove_reshuffle(&reshuffle_witness, &LINK_V_SEED);
     assert!(res.verified, "la proof del reshuffle debe auto-verificar");
 
     // --- EL ENLACE DEL POOL: mismo link_d ---
@@ -77,5 +80,29 @@ fn precompute_links_to_residual() {
     assert!(
         !verify_precompute_lego(&bad, &pk_bytes),
         "un precompute manipulado debe rechazarse"
+    );
+}
+
+/// #1: cada proof de Groth16 usa randomness (r, s) FRESCA e independiente. Dos
+/// proofs del MISMO witness con el MISMO `link_v` deben:
+///   (a) compartir `link_d` (el enlace cp_link depende solo de committed||link_v,
+///       no de r,s) -> el pool sigue funcionando;
+///   (b) NO ser identicas byte-a-byte -> ya no se deriva r,s de una seed fija.
+/// Usa la PK del reshuffle (embebida, ~4.7 MB): no necesita el vendor de 20 MB.
+#[test]
+fn fresh_groth16_randomness_per_proof() {
+    let reshuffle_witness = read_decimals(
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("artifacts/reshuffle_witness.json"),
+    );
+    let a = prove_reshuffle(&reshuffle_witness, &LINK_V_SEED);
+    let b = prove_reshuffle(&reshuffle_witness, &LINK_V_SEED);
+    assert!(a.verified && b.verified, "ambas proofs deben auto-verificar");
+    assert_eq!(
+        a.proof.link_d, b.proof.link_d,
+        "mismo link_v => mismo link_d (el enlace cp_link se preserva)"
+    );
+    assert_ne!(
+        a.proof, b.proof,
+        "cada proof debe usar randomness fresca (r,s) -> no identicas"
     );
 }

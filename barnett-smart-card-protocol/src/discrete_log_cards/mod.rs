@@ -671,7 +671,8 @@ where
         pp: &Self::Parameters,
         shared_key: &Self::AggregatePublicKey,
         deck: &Vec<Self::MaskedCard>,
-        link_v_seed: u64,
+        link_v: &[u8; 32],
+        domain_sep: &[u8; 32],
     ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError> {
         let H = shared_key;
         let H_str = Self::to_hex(H.into_projective());
@@ -726,7 +727,7 @@ where
             "beta": "0",
         });
 
-        zk_reshuffle::lego::prove_shuffle_lego_embedded(&input, link_v_seed)
+        zk_reshuffle::lego::prove_shuffle_lego_embedded(&input, link_v, domain_sep)
             .map_err(|e| CardProtocolError::Other(format!("{}", e)))
     }
 
@@ -744,7 +745,7 @@ where
         sk: &Self::PlayerSecretKey,
         pk: &Self::PlayerPublicKey,
         m_list: &Vec<Self::Card>,
-        link_v_seed: u64,
+        link_v: &[u8; 32],
     ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError> {
         if player_cards.iter().any(|card| card.is_none()) {
             return Err(CardProtocolError::Other(
@@ -820,7 +821,7 @@ where
             "Cb": flatten(&Cb),
         });
 
-        zk_reshuffle::lego::prove_reshuffle_lego_embedded(&input, link_v_seed)
+        zk_reshuffle::lego::prove_reshuffle_lego_embedded(&input, link_v)
             .map_err(|e| CardProtocolError::Other(format!("{}", e)))
     }
 
@@ -832,7 +833,7 @@ where
         r_prime: &Vec<Self::Scalar>,
         pp: &Self::Parameters,
         shared_key: &Self::AggregatePublicKey,
-        link_v_seed: u64,
+        link_v: &[u8; 32],
         circom_wasm: &[u8],
         circom_r1cs: &[u8],
         lego_r1cs: &[u8],
@@ -868,7 +869,7 @@ where
 
         zk_reshuffle::lego::prove_precompute_lego(
             &input,
-            link_v_seed,
+            link_v,
             circom_wasm,
             circom_r1cs,
             lego_r1cs,
@@ -1005,13 +1006,15 @@ where
         shared_key: &Self::AggregatePublicKey,
         previous_deck: &Vec<Self::MaskedCard>,
         proof: &zk_reshuffle::lego::LegoProofJson,
+        domain_sep: &[u8; 32],
     ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>
     where
         C: ProjectiveCurve,
         C::Affine: HasCoordinates + GeneratePoints<C>,
     {
-        // 1. Verificacion ZK del bundle (cp_link + re-derivacion Fiat-Shamir).
-        if !zk_reshuffle::lego::verify_shuffle_lego(proof) {
+        // 1. Verificacion ZK del bundle (cp_link + re-derivacion Fiat-Shamir con
+        //    separacion de dominio #5: domain_sep del contexto compartido).
+        if !zk_reshuffle::lego::verify_shuffle_lego(proof, domain_sep) {
             return Err(CardProtocolError::Other(
                 "proof lego del shuffle no verifica".to_string(),
             ));

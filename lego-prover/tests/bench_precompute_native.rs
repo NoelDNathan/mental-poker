@@ -20,9 +20,12 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use lego_prover::prove_precompute;
+use lego_prover::{load_pk, prove_precompute};
 
-const LINK_V_SEED: u64 = 0x714B;
+const LINK_V_SEED: [u8; 32] = [
+    0x4b, 0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 1,
+];
 const RUNS: usize = 3;
 
 fn vendor(file: &str) -> PathBuf {
@@ -51,13 +54,13 @@ fn bench_precompute_native() {
     println!("[bench-native] available_parallelism = {threads}");
 
     // Warm-up (no cuenta): primera vez paga TLB/caches/alloc del PK de 20 MB.
-    let warm = prove_precompute(&pk_bytes, &r1cs_bytes, &witness, LINK_V_SEED);
+    let warm = prove_precompute(&pk_bytes, &r1cs_bytes, &witness, &LINK_V_SEED);
     assert!(warm.verified, "la proof debe auto-verificar");
 
     let mut times = Vec::with_capacity(RUNS);
     for i in 0..RUNS {
         let t = Instant::now();
-        let out = prove_precompute(&pk_bytes, &r1cs_bytes, &witness, LINK_V_SEED);
+        let out = prove_precompute(&pk_bytes, &r1cs_bytes, &witness, &LINK_V_SEED);
         let ms = t.elapsed().as_millis();
         assert!(out.verified, "la proof debe auto-verificar");
         times.push(ms);
@@ -66,4 +69,31 @@ fn bench_precompute_native() {
     let avg = times.iter().sum::<u128>() / times.len() as u128;
     let min = times.iter().min().copied().unwrap_or(0);
     println!("[bench-native] prove avg={avg} ms | min={min} ms | runs={times:?}");
+}
+
+/// #4 (antes/despues de la cache): mide el coste de DESERIALIZAR la PK lego, que
+/// el camino antiguo pagaba en CADA `prove_precompute`/`verify` (N veces por pool
+/// de N) y la cache ahora paga UNA sola vez por version. El ahorro al generar un
+/// pool de N = (N-1) x este coste.
+#[test]
+#[ignore]
+fn bench_pk_parse_cost() {
+    let pk_bytes = std::fs::read(vendor("precompute_pk.bin")).expect("pk");
+    println!("[bench-parse] PK = {} bytes", pk_bytes.len());
+    let _ = load_pk(&pk_bytes); // warmup (TLB/alloc)
+    let mut times = Vec::new();
+    for i in 0..5 {
+        let t = Instant::now();
+        let pk = load_pk(&pk_bytes);
+        let ms = t.elapsed().as_millis();
+        std::hint::black_box(&pk);
+        times.push(ms);
+        println!("[bench-parse] load_pk {}/5: {} ms", i + 1, ms);
+    }
+    let avg = times.iter().sum::<u128>() / times.len() as u128;
+    println!(
+        "[bench-parse] load_pk avg = {avg} ms (coste que la cache elimina en cada \
+         prove/verify tras el 1o; pool de N ahorra (N-1)x = {} ms para N=2)",
+        avg
+    );
 }

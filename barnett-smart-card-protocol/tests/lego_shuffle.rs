@@ -41,13 +41,22 @@ fn shuffle_and_remask2_lego_real_deck_verifies() {
     let permutation = Permutation::new(rng, deck_size);
     let r_prime: Vec<BjFr> = (0..deck_size).map(|_| BjFr::rand(rng)).collect();
 
+    // #1: link_v = 32 bytes (ancho completo). #5: domain_sep liga la proof a un
+    // contexto (chain/partida/...); prover y verifier deben usar EL MISMO.
+    let link_v: [u8; 32] = [
+        0xee, 0xff, 0xc0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 7,
+    ];
+    let domain_sep = zk_reshuffle::lego::fs_domain_separator(31337, b"game-abc", 0, 0);
+
     let out = CardProtocol::shuffle_and_remask2_lego(
         &permutation,
         &r_prime,
         &pp,
         &shared_key,
         &deck,
-        /* link_v_seed */ 0xC0FFEE,
+        &link_v,
+        &domain_sep,
     )
     .expect("shuffle_and_remask2_lego");
 
@@ -64,17 +73,29 @@ fn shuffle_and_remask2_lego_real_deck_verifies() {
         "numero de public inputs del circuito shuffle lego"
     );
 
-    // Lado VERIFIER/peer (3.4b paso 2): verifica el bundle y reconstruye el mazo
-    // resultante desde Ca_out/Cb_out (exactamente lo que hara el receive handler).
-    let shuffled = CardProtocol::verify_shuffle_remask2_lego(&pp, &shared_key, &deck, &out.proof)
-        .expect("verify_shuffle_remask2_lego debe aceptar el bundle valido");
+    // Lado VERIFIER/peer (3.4b paso 2): verifica el bundle con EL MISMO domain_sep
+    // y reconstruye el mazo resultante desde Ca_out/Cb_out (lo que hara el receive
+    // handler).
+    let shuffled =
+        CardProtocol::verify_shuffle_remask2_lego(&pp, &shared_key, &deck, &out.proof, &domain_sep)
+            .expect("verify_shuffle_remask2_lego debe aceptar el bundle valido");
     assert_eq!(shuffled.len(), deck_size, "mazo resultante de 52 cartas");
+
+    // #5 (anti-replay): el MISMO bundle con un domain_sep de OTRO contexto (otra
+    // partida) debe RECHAZARSE — alpha/beta re-derivados no cuadran.
+    let other_ctx = zk_reshuffle::lego::fs_domain_separator(31337, b"OTRA-partida", 0, 0);
+    assert!(
+        CardProtocol::verify_shuffle_remask2_lego(&pp, &shared_key, &deck, &out.proof, &other_ctx)
+            .is_err(),
+        "una proof valida NO debe verificar bajo otro domain_sep (replay entre contextos)"
+    );
 
     // Tamper: un public manipulado debe hacer fallar la verificacion del peer.
     let mut bad = out.proof.clone();
     bad.pubs[0] = "123".to_string();
     assert!(
-        CardProtocol::verify_shuffle_remask2_lego(&pp, &shared_key, &deck, &bad).is_err(),
+        CardProtocol::verify_shuffle_remask2_lego(&pp, &shared_key, &deck, &bad, &domain_sep)
+            .is_err(),
         "un bundle manipulado debe rechazarse"
     );
 }

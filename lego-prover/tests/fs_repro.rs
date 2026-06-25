@@ -6,13 +6,21 @@
 //! alpha/beta reales: estan en `wires[421]` y `wires[422]` (los dos ultimos
 //! publics). Si nuestra derivacion los reproduce desde `link_d` + los 420
 //! publics, el encoding keccak es identico al on-chain.
+//!
+//! `#[ignore]` desde #5: el transcript FS de Rust ahora lleva SEPARACION DE
+//! DOMINIO (`domain_sep`, ver `fs::derive_alpha_beta`), asi que ya NO reproduce
+//! la referencia ANTIGUA del lab/Solidity (que no la lleva). Reactivar cuando se
+//! porte el `domain_sep` a `VerifyShufflingLego.sol` +
+//! `derive-lego-fs-challenges.mjs` y se regenere `shuffle_witness.json` con el
+//! mismo contexto (parte on-chain de #5, diferida). Abajo se pasa el domain_sep
+//! con el que se deberia regenerar el fixture.
 
 use ark_bn254::Fr;
 use core::str::FromStr;
 
 use lego_prover::{
-    committed_witnesses, compute_link_d, derive_alpha_beta, link_v_from_seed, load_r1cs,
-    make_link_gens, parse_witness, COMMIT_WITNESS_COUNT, NUM_FS_PUBLICS,
+    committed_witnesses, compute_link_d, derive_alpha_beta, fs_domain_separator, link_v_from_seed,
+    load_r1cs, make_link_gens, parse_witness, COMMIT_WITNESS_COUNT, NUM_FS_PUBLICS,
 };
 
 const LINK_V_SEED: u64 = 0x714B;
@@ -21,6 +29,7 @@ static R1CS_BYTES: &[u8] = include_bytes!("../artifacts/shuffle_r1cs.bin");
 static WITNESS_JSON: &str = include_str!("../artifacts/shuffle_witness.json");
 
 #[test]
+#[ignore]
 fn alpha_beta_reproduces_onchain_encoding() {
     let r1cs = load_r1cs(R1CS_BYTES);
     let num_public = r1cs.num_public as usize;
@@ -45,7 +54,9 @@ fn alpha_beta_reproduces_onchain_encoding() {
     let link_v = link_v_from_seed(LINK_V_SEED);
     let link_d = compute_link_d(&link_gens.pedersen_gens, &committed, link_v);
 
-    let (alpha, beta) = derive_alpha_beta(&link_d, &pubs);
+    // Contexto con el que se debera regenerar el fixture al portar #5 a Solidity.
+    let domain_sep = fs_domain_separator(31337, b"game-fixture", 0, 0);
+    let (alpha, beta) = derive_alpha_beta(&domain_sep, &link_d, &pubs);
 
     assert_eq!(
         alpha, alpha_witness,

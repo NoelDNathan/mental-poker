@@ -12,7 +12,7 @@
 use core::str::FromStr;
 
 use ark_bn254::{Bn254, Fr, G1Affine};
-use ark_ff::UniformRand;
+use ark_ff::{PrimeField, UniformRand};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::{rngs::StdRng, SeedableRng};
 
@@ -35,7 +35,7 @@ pub use client::{
 
 pub use circuit::{CircuitR1cs, ProverCircuit, R1csConstraint};
 pub use circuits::{LegoCircuit, PRECOMPUTE, RESHUFFLE, SHUFFLE};
-pub use fs::{derive_alpha_beta, NUM_FS_PUBLICS};
+pub use fs::{derive_alpha_beta, fs_domain_separator, NUM_FS_PUBLICS};
 pub use link::{compute_link_d, make_link_gens, COMMIT_WITNESS_COUNT};
 pub use proof_json::{G1Json, G2Json, LegoBundle, LegoProofJson};
 
@@ -66,9 +66,24 @@ pub fn committed_witnesses(wires: &[Fr], num_public: usize) -> Vec<Fr> {
     wires[num_public..num_public + COMMIT_WITNESS_COUNT as usize].to_vec()
 }
 
-/// Blinding `link_v` reproducible a partir de una seed. El flujo Fiat-Shamir es
-/// commit (link_d) -> challenges -> prove, asi que link_v se fija ANTES de
-/// derivar challenges y debe ser estable entre pasadas. Igual que el lab.
+/// Blinding `link_v` de ANCHO COMPLETO (#1) reconstruido de 32 bytes con entropia
+/// real generados por el caller (wasm_client) y PERSISTIDOS en la entrada de
+/// precompute. El flujo Fiat-Shamir es commit (link_d) -> challenges -> prove,
+/// asi que link_v se fija ANTES de derivar challenges y debe ser estable entre
+/// pasadas Y entre precompute<->residual (mismo `link_v` => mismo `link_d` => el
+/// enlace cp_link). `from_le_bytes_mod_order` reduce los 256 bits a `Fr` (~254
+/// bits, practicamente uniforme): NO se usa `seed_from_u64` (solo 64 bits).
+pub fn link_v_from_bytes(bytes: &[u8; 32]) -> Fr {
+    Fr::from_le_bytes_mod_order(bytes)
+}
+
+/// SOLO reproducibilidad de lab/tests (NO produccion). Deriva un `link_v` de una
+/// seed `u64` igual que el lab historico, para que los tests `*_repro` /
+/// `linkage_*` reproduzcan EXACTAMENTE el `link_d`/Fiat-Shamir de referencia del
+/// lab y del verifier Solidity. El camino de produccion usa `link_v_from_bytes`
+/// con 32 bytes de entropia real (#1): este helper NO se llama desde ningun prove
+/// productivo (sin usos productivos de `seed_from_u64`).
+#[doc(hidden)]
 pub fn link_v_from_seed(seed: u64) -> Fr {
     Fr::rand(&mut StdRng::seed_from_u64(seed))
 }

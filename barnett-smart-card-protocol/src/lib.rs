@@ -241,19 +241,24 @@ pub trait BarnettSmartProtocol {
         pp: &Self::Parameters,
         shared_key: &Self::AggregatePublicKey,
         deck: &Vec<Self::MaskedCard>,
-        link_v_seed: u64,
+        link_v: &[u8; 32],
+        domain_sep: &[u8; 32],
     ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError>;
 
     /// Verificacion P2P del bundle lego del shuffle (capa 3.4b paso 2): lo que
     /// hace cada peer al recibir un `LegoProofJson`. Verifica la proof (cp_link +
-    /// Fiat-Shamir, via `zk_reshuffle::lego::verify_shuffle_lego`), comprueba que
-    /// H/G/Ca/Cb de los publics cuadran con `shared_key`/`pp`/`previous_deck`, y
-    /// reconstruye el mazo resultante desde `Ca_out`/`Cb_out`.
+    /// Fiat-Shamir CON separacion de dominio #5, via
+    /// `zk_reshuffle::lego::verify_shuffle_lego`), comprueba que H/G/Ca/Cb de los
+    /// publics cuadran con `shared_key`/`pp`/`previous_deck`, y reconstruye el mazo
+    /// resultante desde `Ca_out`/`Cb_out`. `domain_sep` lo reconstruye el verifier
+    /// del estado compartido (mismo que uso el prover) -> rechaza replays de otro
+    /// contexto.
     fn verify_shuffle_remask2_lego(
         pp: &Self::Parameters,
         shared_key: &Self::AggregatePublicKey,
         previous_deck: &Vec<Self::MaskedCard>,
         proof: &zk_reshuffle::lego::LegoProofJson,
+        domain_sep: &[u8; 32],
     ) -> Result<Vec<Self::MaskedCard>, CardProtocolError>;
 
     /// Variante LegoGroth16 de `remask_for_reshuffle` (capa 3.4b). Construye el
@@ -269,7 +274,7 @@ pub trait BarnettSmartProtocol {
         sk: &Self::PlayerSecretKey,
         pk: &Self::PlayerPublicKey,
         m_list: &Vec<Self::Card>,
-        link_v_seed: u64,
+        link_v: &[u8; 32],
     ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError>;
 
     /// Variante LegoGroth16 del PRECOMPUTE del pool (capa 3.4b paso 3). Construye
@@ -278,14 +283,14 @@ pub trait BarnettSmartProtocol {
     /// luego consumira el residual del turno, y delega en
     /// `zk_reshuffle::lego::prove_precompute_lego`. NADA embebido: el circom
     /// `.wasm`/`.r1cs` y la PK/r1cs lego (~20 MB) llegan por bytes (load-on-demand,
-    /// fetch JS). Con el MISMO `link_v_seed` produce el MISMO `link_d` que el
+    /// fetch JS). Con el MISMO `link_v` produce el MISMO `link_d` que el
     /// residual: ese es el enlace cp_link que hace combinable el pool.
     #[allow(clippy::too_many_arguments)]
     fn prove_precompute_lego(
         r_prime: &Vec<Self::Scalar>,
         pp: &Self::Parameters,
         shared_key: &Self::AggregatePublicKey,
-        link_v_seed: u64,
+        link_v: &[u8; 32],
         circom_wasm: &[u8],
         circom_r1cs: &[u8],
         lego_r1cs: &[u8],
