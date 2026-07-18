@@ -35,7 +35,11 @@ barnett-smart-card-protocol = {path = "../barnett-smart-card-protocol"}
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rand_chacha = "0.9.0" 
+# 0.3.x es la serie compatible con rand 0.8 / rand_core 0.6 (la que usa
+# ark-std 0.3). La 0.9 que habia antes ni siquiera compilaba junta con
+# Card::rand. ChaCha20 garantiza flujo reproducible entre versiones, que es
+# lo que necesita el mazo canonico determinista.
+rand_chacha = "0.3"
 
 
 [dev-dependencies]

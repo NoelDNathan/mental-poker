@@ -292,6 +292,51 @@ pub fn generate_list_of_cards<R: Rng>(rng: &mut R, num_of_cards: usize) -> Vec<C
     list_of_cards
 }
 
+// =============================================================================
+// MAZO CANONICO DETERMINISTA (nothing-up-my-sleeve)
+// =============================================================================
+//
+// El mapping punto→carta es el ALFABETO del protocolo, no un secreto: se
+// difunde en claro y el secreto vive entero en la permutacion + re-cifrado de
+// cada ronda de shuffle. Que lo generase el dealer con `Card::rand` por mano
+// tenia tres costes sin ninguna ganancia:
+//   1. el dealer ELIGE los 52 puntos (nadie los valida: puede escogerlos con
+//      relaciones algebraicas entre si),
+//   2. puede equivocar (mapas distintos a peers distintos),
+//   3. al ser un dato transmitido y no derivado, negarse a enviarlo bloquea la
+//      mesa pre-cadena sin reclamo posible (nadie mas puede abrir startGame ZK).
+//
+// La semilla es una constante ASCII publicada: cualquiera recomputa el mazo y
+// verifica que nadie tuvo libertad para elegir los puntos. ChaCha20 garantiza
+// flujo reproducible entre versiones de rand_chacha, y `Card::rand` deriva
+// puntos del subgrupo primo (C::rand). El mismo mazo queda persistido on-chain
+// (cardMapping) y volcado a JSON (examples/dump_canonical_deck.rs) para el
+// deploy y los tests de contrato — el test `canonical_deck_golden_pin` vigila
+// cualquier deriva entre las tres copias.
+
+/// Semilla de dominio del mazo canonico. Exactamente 32 bytes ASCII.
+pub const CANONICAL_DECK_SEED: [u8; 32] = *b"dog-poker-club/canonical-deck/v1";
+
+/// Deriva el mazo canonico completo. Determinista: misma salida siempre,
+/// en cualquier cliente, sin RNG externo.
+pub fn generate_canonical_deck(num_of_cards: usize) -> Vec<Card> {
+    use rand::SeedableRng;
+    let mut rng = rand_chacha::ChaCha20Rng::from_seed(CANONICAL_DECK_SEED);
+    generate_list_of_cards(&mut rng, num_of_cards)
+}
+
+/// Coordenadas afines (x, y) de una carta como enteros decimales — el formato
+/// que esperan el contrato (BabyJubJub.Point) y el deploy/tests de Hardhat.
+pub fn card_coords_decimal(card: &Card) -> (String, String) {
+    use num_bigint::BigUint;
+    let x_bytes = to_bytes![card.0.x].expect("serialize x");
+    let y_bytes = to_bytes![card.0.y].expect("serialize y");
+    (
+        BigUint::from_bytes_le(&x_bytes).to_string(),
+        BigUint::from_bytes_le(&y_bytes).to_string(),
+    )
+}
+
 pub fn encode_cards<R: Rng>(rng: &mut R, num_of_cards: usize) -> HashMap<Card, ClassicPlayingCard> {
     let mut map: HashMap<Card, ClassicPlayingCard> = HashMap::new();
     let plaintexts = (0..num_of_cards)
@@ -371,3 +416,68 @@ pub enum State {
 //         &permutation,
 //     )?;
 // }
+
+#[cfg(test)]
+mod canonical_deck_tests {
+    use super::*;
+
+    const NUM_OF_CARDS: usize = 52;
+
+    #[test]
+    fn canonical_deck_is_deterministic() {
+        let a = generate_canonical_deck(NUM_OF_CARDS);
+        let b = generate_canonical_deck(NUM_OF_CARDS);
+        assert_eq!(a, b, "dos derivaciones deben producir el mismo mazo");
+    }
+
+    #[test]
+    fn canonical_deck_has_52_distinct_points() {
+        let deck = generate_canonical_deck(NUM_OF_CARDS);
+        assert_eq!(deck.len(), NUM_OF_CARDS);
+        let mut coords: Vec<(String, String)> =
+            deck.iter().map(card_coords_decimal).collect();
+        coords.sort();
+        coords.dedup();
+        assert_eq!(coords.len(), NUM_OF_CARDS, "hay puntos repetidos en el mazo");
+    }
+
+    /// Pin de oro: si la derivacion cambia (version de rand_chacha, de ark, o
+    /// de la semilla), este test rompe ANTES de que el mazo del cliente deje
+    /// de casar con el cardMapping persistido on-chain y el canonical-deck.json
+    /// del deploy. Si rompe a proposito (cambio de dominio), regenerar el JSON
+    /// con dump_canonical_deck, actualizar estas constantes y redesplegar.
+    #[test]
+    fn canonical_deck_golden_pin() {
+        let deck = generate_canonical_deck(NUM_OF_CARDS);
+        let (x0, y0) = card_coords_decimal(&deck[0]);
+        let (x51, y51) = card_coords_decimal(&deck[51]);
+        // GOLDEN_PIN: valores fijados en la primera derivacion (ver commit).
+        assert_eq!(x0, GOLDEN_X0);
+        assert_eq!(y0, GOLDEN_Y0);
+        assert_eq!(x51, GOLDEN_X51);
+        assert_eq!(y51, GOLDEN_Y51);
+    }
+
+    // Fijados en la primera derivacion real 2026-07-18 (canonical_deck_print_golden,
+    // stable-x86_64-pc-windows-msvc) — no inventados a mano.
+    const GOLDEN_X0: &str =
+        "11694183964472001047926894042924272449397587614265636681826143594141639093859";
+    const GOLDEN_Y0: &str =
+        "21581345873182909073841769149332526506110339946632099000480649919264535037125";
+    const GOLDEN_X51: &str =
+        "19003601969315543371389921540264059275493746026425554903402028743194677697307";
+    const GOLDEN_Y51: &str =
+        "19883967393943663021230260788008533988918422708598439811879002371669101517876";
+
+    /// Utilidad para fijar el pin: imprime las esquinas del mazo.
+    #[test]
+    fn canonical_deck_print_golden() {
+        let deck = generate_canonical_deck(NUM_OF_CARDS);
+        let (x0, y0) = card_coords_decimal(&deck[0]);
+        let (x51, y51) = card_coords_decimal(&deck[51]);
+        println!("GOLDEN_X0  = {}", x0);
+        println!("GOLDEN_Y0  = {}", y0);
+        println!("GOLDEN_X51 = {}", x51);
+        println!("GOLDEN_Y51 = {}", y51);
+    }
+}
