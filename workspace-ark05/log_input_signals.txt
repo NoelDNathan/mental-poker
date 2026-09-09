@@ -1,0 +1,5 @@
+main.H 2
+main.G 2
+main.r_prime_G 104
+main.r_prime_H 104
+main.r_prime 52

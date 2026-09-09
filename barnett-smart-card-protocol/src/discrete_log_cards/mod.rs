@@ -838,6 +838,7 @@ where
         circom_r1cs: &[u8],
         lego_r1cs: &[u8],
         lego_pk: &[u8],
+        graph: Option<&[u8]>,
     ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError> {
         let H = shared_key;
         let H_str = Self::to_hex(H.into_projective());
@@ -867,14 +868,21 @@ where
             "r_prime": r_prime_dec,
         });
 
-        zk_reshuffle::lego::prove_precompute_lego(
-            &input,
-            link_v,
-            circom_wasm,
-            circom_r1cs,
-            lego_r1cs,
-            lego_pk,
-        )
+        // Witness por grafo si el caller lo aporta (drop-in, wires idénticos);
+        // si no, el intérprete ark-circom de siempre.
+        match graph {
+            Some(g) => zk_reshuffle::lego::prove_precompute_lego_graph(
+                &input, link_v, g, lego_r1cs, lego_pk,
+            ),
+            None => zk_reshuffle::lego::prove_precompute_lego(
+                &input,
+                link_v,
+                circom_wasm,
+                circom_r1cs,
+                lego_r1cs,
+                lego_pk,
+            ),
+        }
         .map_err(|e| CardProtocolError::Other(format!("{}", e)))
     }
 

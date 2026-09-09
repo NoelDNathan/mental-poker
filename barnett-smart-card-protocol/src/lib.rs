@@ -285,6 +285,10 @@ pub trait BarnettSmartProtocol {
     /// `.wasm`/`.r1cs` y la PK/r1cs lego (~20 MB) llegan por bytes (load-on-demand,
     /// fetch JS). Con el MISMO `link_v` produce el MISMO `link_d` que el
     /// residual: ese es el enlace cp_link que hace combinable el pool.
+    /// `graph`: fichero `.graph` de witnesscalc para el MISMO circuito; si
+    /// `Some`, el witness se evalúa por grafo (~4x más rápido, wires idénticos
+    /// — el `.r1cs` del grafo debe ser byte-idéntico al desplegado) en vez del
+    /// intérprete ark-circom; `None` = camino ark-circom de siempre.
     #[allow(clippy::too_many_arguments)]
     fn prove_precompute_lego(
         r_prime: &Vec<Self::Scalar>,
@@ -295,6 +299,7 @@ pub trait BarnettSmartProtocol {
         circom_r1cs: &[u8],
         lego_r1cs: &[u8],
         lego_pk: &[u8],
+        graph: Option<&[u8]>,
     ) -> Result<zk_reshuffle::lego::ProveOutput, CardProtocolError>;
 
 
