@@ -337,6 +337,17 @@ pub fn card_coords_decimal(card: &Card) -> (String, String) {
     )
 }
 
+/// Coordenadas afines (x, y) de una carta ENMASCARADA (Ca, Cb) en decimal:
+/// el formato wire del contrato/frontend (`getEncryptedCards`). Diagnostico.
+pub fn masked_card_coords_decimal(card: &MaskedCard) -> [String; 4] {
+    use num_bigint::BigUint;
+    let dec = |v: &<Curve as ark_ec::ProjectiveCurve>::BaseField| {
+        let bytes = to_bytes![v].expect("serialize coord");
+        BigUint::from_bytes_le(&bytes).to_string()
+    };
+    [dec(&card.0.x), dec(&card.0.y), dec(&card.1.x), dec(&card.1.y)]
+}
+
 pub fn encode_cards<R: Rng>(rng: &mut R, num_of_cards: usize) -> HashMap<Card, ClassicPlayingCard> {
     let mut map: HashMap<Card, ClassicPlayingCard> = HashMap::new();
     let plaintexts = (0..num_of_cards)
