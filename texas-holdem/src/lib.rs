@@ -458,6 +458,37 @@ mod canonical_deck_tests {
         assert_eq!(y51, GOLDEN_Y51);
     }
 
+    /// El `card_mapping` de una mano es exactamente el mazo canonico (mismo
+    /// conjunto de 52 puntos), pero un HashMap NO conserva ese orden: las
+    /// entradas publicas `m` del circuito de reshuffle deben salir del mazo
+    /// canonico, nunca de `card_mapping.keys()` (2026-09-16: el primer
+    /// reshuffle real fallaba con "m del bundle no coincide con m_list en la
+    /// posicion 0" porque prover y verificador iteraban su propio HashMap).
+    #[test]
+    fn card_mapping_es_el_mazo_canonico_pero_no_su_orden() {
+        let deck = generate_canonical_deck(NUM_OF_CARDS);
+        let mapping = encode_cards_ext(deck.clone());
+        assert_eq!(mapping.len(), NUM_OF_CARDS);
+        for card in &deck {
+            assert!(mapping.contains_key(card), "el mapping no contiene una carta del mazo canonico");
+        }
+        // Dos derivaciones independientes dan el mismo orden: es lo que hace
+        // que prover y verificador coincidan sin intercambiar nada.
+        assert_eq!(deck, generate_canonical_deck(NUM_OF_CARDS));
+        // Un mapa reconstruido con otra insercion (como al restaurar un
+        // snapshot) no tiene por que iterar igual: no hay que fiarse de
+        // keys(). No se afirma que difieran (depende del hasher), solo que el
+        // conjunto es el mismo — el ORDEN lo da el mazo canonico.
+        let mut entries: Vec<(Card, ClassicPlayingCard)> =
+            mapping.iter().map(|(card, classic)| (card.clone(), classic.clone())).collect();
+        entries.reverse();
+        let rebuilt: HashMap<Card, ClassicPlayingCard> = entries.into_iter().collect();
+        assert_eq!(rebuilt.len(), NUM_OF_CARDS);
+        for card in &deck {
+            assert_eq!(rebuilt.get(card), mapping.get(card));
+        }
+    }
+
     // Fijados en la primera derivacion real 2026-07-18 (canonical_deck_print_golden,
     // stable-x86_64-pc-windows-msvc) — no inventados a mano.
     const GOLDEN_X0: &str =
