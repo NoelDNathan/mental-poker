@@ -29,6 +29,7 @@ pub mod link;
 pub mod proof_json;
 
 pub use client::{
+    chaos_evict_precompute_cache, touch_precompute_cache,
     prove_precompute, prove_reshuffle, prove_shuffle, shuffle_challenges, verify_precompute_lego,
     verify_reshuffle_lego, verify_shuffle_lego, ProveOutput, ShuffleChallenges,
 };

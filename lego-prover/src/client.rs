@@ -6,7 +6,7 @@
 use core::str::FromStr;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, TryLockError};
 
 use ark_bn254::{Bn254, Fr};
 use ark_std::rand::{rngs::StdRng, SeedableRng};
@@ -54,29 +54,64 @@ fn content_key(bytes: &[u8]) -> u64 {
 
 /// Cache de 1 entrada (last-used) parametrizada por rol. Devuelve un `Arc` para
 /// soltar el lock antes de usar el artefacto (el prove corre fuera del lock).
+///
+/// REGLA (2026-09-17, causa del "Atomics.wait cannot be called in this
+/// context"): esta cache la tocan a la vez el HILO PRINCIPAL del navegador
+/// (verificar una proof pendiente, la residual del turno) y los workers de
+/// rayon (relleno del pool). El hilo principal no puede bloquearse: un
+/// `lock()` contendido es `memory.atomic.wait`, el navegador corta la llamada
+/// con una excepcion JS que no desenrolla Rust y el estado del wasm queda
+/// envenenado. Por eso:
+///   1. el PARSEO (segundos, ~20 MB) ocurre FUERA del candado;
+///   2. la seccion critica es solo "comparar la clave y clonar/guardar el
+///      `Arc`" (nanosegundos) y se toma con `try_lock` en bucle, nunca con
+///      `lock()`;
+///   3. no hay `OnceLock`: su `Once` tambien espera si otro hilo inicializa.
+/// Coste aceptado: si dos hilos llegan a la vez con la cache fria, los dos
+/// parsean (una vez por version de PK y pestana) y gana el ultimo en guardar;
+/// con la misma clave el resultado es identico.
 struct OneSlot<T> {
-    slot: OnceLock<Mutex<Option<(u64, Arc<T>)>>>,
+    slot: Mutex<Option<(u64, Arc<T>)>>,
 }
 
 impl<T> OneSlot<T> {
     const fn new() -> Self {
         Self {
-            slot: OnceLock::new(),
+            slot: Mutex::new(None),
+        }
+    }
+
+    /// Seccion critica SIN espera bloqueante (ver la regla de arriba). Lo que
+    /// se hace dentro debe ser de nanosegundos: nada de parsear ni de asignar
+    /// memoria grande aqui.
+    fn with_slot<R>(&self, f: impl FnOnce(&mut Option<(u64, Arc<T>)>) -> R) -> R {
+        loop {
+            match self.slot.try_lock() {
+                Ok(mut guard) => return f(&mut guard),
+                Err(TryLockError::WouldBlock) => std::hint::spin_loop(),
+                Err(TryLockError::Poisoned(poisoned)) => return f(&mut poisoned.into_inner()),
+            }
         }
     }
 
     fn get_or_parse(&self, bytes: &[u8], parse: impl FnOnce(&[u8]) -> T) -> Arc<T> {
-        let m = self.slot.get_or_init(|| Mutex::new(None));
         let key = content_key(bytes);
-        let mut guard = m.lock().expect("cache lock");
-        if let Some((k, v)) = guard.as_ref() {
-            if *k == key {
-                return Arc::clone(v);
-            }
+        let hit = self.with_slot(|slot| match slot {
+            Some((k, v)) if *k == key => Some(Arc::clone(v)),
+            _ => None,
+        });
+        if let Some(v) = hit {
+            return v;
         }
+        // Fuera del candado: puede tardar segundos.
         let parsed = Arc::new(parse(bytes));
-        *guard = Some((key, Arc::clone(&parsed)));
+        self.with_slot(|slot| *slot = Some((key, Arc::clone(&parsed))));
         parsed
+    }
+
+    /// Vacia la ranura (solo arnes).
+    fn evict(&self) {
+        self.with_slot(|slot| *slot = None);
     }
 }
 
@@ -93,6 +128,24 @@ fn cached_precompute_r1cs(bytes: &[u8]) -> Arc<CircuitR1cs> {
 fn cached_precompute_pvk(pk_bytes: &[u8], pk: &ProvingKeyWithLink<E>) -> Arc<PreparedVerifyingKey<E>> {
     // Clave por los bytes de la PK: una PVK por version de PK.
     PRECOMPUTE_PVK.get_or_parse(pk_bytes, |_| prepare_verifying_key::<E>(&pk.vk.groth16_vk))
+}
+
+/// SOLO ARNES (test 1 de la carrera main/worker): vacia la cache de precompute
+/// para que el siguiente `cached_*` vuelva a parsear de verdad (segundos).
+/// Se llama SIN worker en vuelo (sin contencion).
+pub fn chaos_evict_precompute_cache() {
+    PRECOMPUTE_PK.evict();
+    PRECOMPUTE_R1CS.evict();
+    PRECOMPUTE_PVK.evict();
+}
+
+/// Toca la cache de precompute tal y como lo hace un prove o una verificacion
+/// (`cached_r1cs` + `cached_pk` + `cached_pvk`). Con la cache fria parsea
+/// (segundos); caliente, tres clones de `Arc`. El arnes mide el tiempo.
+pub fn touch_precompute_cache(pk_bytes: &[u8], r1cs_bytes: &[u8]) {
+    let _r1cs = cached_precompute_r1cs(r1cs_bytes);
+    let pk = cached_precompute_pk(pk_bytes);
+    let _pvk = cached_precompute_pvk(pk_bytes, &pk);
 }
 
 // PK/R1CS/PVK embebidos: parseados una sola vez por proceso (direccion estable).
@@ -322,4 +375,60 @@ pub fn verify_reshuffle_lego(proof: &LegoProofJson) -> bool {
     };
     verify_proof_incl_cp_link(reshuffle_pvk(), &reshuffle_pk().vk, &ark_proof, &public_inputs)
         .is_ok()
+}
+
+#[cfg(test)]
+mod one_slot_tests {
+    use super::OneSlot;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    static SLOT: OneSlot<Vec<u8>> = OneSlot::new();
+    static PARSES: AtomicUsize = AtomicUsize::new(0);
+
+    fn slow_parse(bytes: &[u8]) -> Vec<u8> {
+        PARSES.fetch_add(1, Ordering::SeqCst);
+        thread::sleep(Duration::from_millis(300));
+        bytes.to_vec()
+    }
+
+    #[test]
+    fn el_parseo_no_retiene_el_candado_y_la_cache_queda_caliente() {
+        SLOT.evict();
+        PARSES.store(0, Ordering::SeqCst);
+        let bytes: Arc<Vec<u8>> = Arc::new((0..64u8).collect());
+
+        // "Worker": entra con la cache fria y se pasa 300 ms parseando.
+        let w_bytes = Arc::clone(&bytes);
+        let worker = thread::spawn(move || SLOT.get_or_parse(&w_bytes, slow_parse));
+        thread::sleep(Duration::from_millis(50));
+
+        // "Main": llega con el worker dentro del parseo. Con el candado viejo
+        // esperaria a que terminara (en el navegador: Atomics.wait). Ahora
+        // parsea por su cuenta sin tocar un candado retenido.
+        let t0 = Instant::now();
+        let mine = SLOT.get_or_parse(&bytes, slow_parse);
+        let mine_ms = t0.elapsed().as_millis();
+        let theirs = worker.join().unwrap();
+
+        assert_eq!(*mine, *bytes);
+        assert_eq!(*theirs, *bytes);
+        assert_eq!(PARSES.load(Ordering::SeqCst), 2, "cache fria a la vez: los dos parsean");
+        assert!(mine_ms < 600, "el main no espero al worker ({} ms)", mine_ms);
+
+        // Caliente: nadie parsea y es inmediato.
+        let t1 = Instant::now();
+        let again = SLOT.get_or_parse(&bytes, slow_parse);
+        assert_eq!(PARSES.load(Ordering::SeqCst), 2);
+        assert!(t1.elapsed() < Duration::from_millis(50));
+        assert_eq!(*again, *bytes);
+
+        // Otra version del artefacto: se reparsea y sustituye.
+        let other: Vec<u8> = (100..164u8).collect();
+        let got = SLOT.get_or_parse(&other, slow_parse);
+        assert_eq!(*got, other);
+        assert_eq!(PARSES.load(Ordering::SeqCst), 3);
+    }
 }
