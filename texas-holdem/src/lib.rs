@@ -429,6 +429,48 @@ pub enum State {
 // }
 
 #[cfg(test)]
+mod hand_roster_key_tests {
+    use super::*;
+    use rand::SeedableRng;
+
+    /// Mesa con cualquier numero de jugadores: la clave conjunta de una mano
+    /// es la SUMA de las claves de las sillas que la juegan (roster), en el
+    /// mismo orden que el contrato (_calculateHomomorphicKey recorre las
+    /// sillas ascendentes y suma). Un subconjunto {0,2} de una mesa de 3 da
+    /// una clave distinta de la de los 3 y de la de {0,1}, y no depende del
+    /// orden en que se agreguen las claves (suma conmutativa).
+    #[test]
+    fn clave_conjunta_de_un_roster_es_la_suma_de_sus_claves() {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(7);
+        let pp = CardProtocol::setup(&mut rng, generator(), 2, 26).unwrap();
+        let players: Vec<InternalPlayer> = (0..3u8)
+            .map(|i| InternalPlayer::new(&mut rng, &pp, &vec![b'p', i]).unwrap())
+            .collect();
+        let info = |i: usize| {
+            (
+                players[i].pk.clone(),
+                players[i].proof_key.clone(),
+                players[i].name.clone(),
+            )
+        };
+        let key_of = |chairs: &[usize]| {
+            let infos: Vec<_> = chairs.iter().map(|&i| info(i)).collect();
+            CardProtocol::compute_aggregate_key(&pp, &infos).unwrap()
+        };
+        let all = key_of(&[0, 1, 2]);
+        let zero_two = key_of(&[0, 2]);
+        let zero_one = key_of(&[0, 1]);
+        assert_ne!(all, zero_two);
+        assert_ne!(zero_two, zero_one);
+        // Suma explicita de puntos == agregado (es lo que hace el contrato).
+        assert_eq!(zero_two, players[0].pk + players[2].pk);
+        assert_eq!(all, players[0].pk + players[1].pk + players[2].pk);
+        // Conmutativa: el orden de llegada de las claves no importa.
+        assert_eq!(key_of(&[2, 0]), zero_two);
+    }
+}
+
+#[cfg(test)]
 mod canonical_deck_tests {
     use super::*;
 
