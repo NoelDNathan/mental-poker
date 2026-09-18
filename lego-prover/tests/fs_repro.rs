@@ -7,13 +7,14 @@
 //! publics). Si nuestra derivacion los reproduce desde `link_d` + los 420
 //! publics, el encoding keccak es identico al on-chain.
 //!
-//! `#[ignore]` desde #5: el transcript FS de Rust ahora lleva SEPARACION DE
-//! DOMINIO (`domain_sep`, ver `fs::derive_alpha_beta`), asi que ya NO reproduce
-//! la referencia ANTIGUA del lab/Solidity (que no la lleva). Reactivar cuando se
-//! porte el `domain_sep` a `VerifyShufflingLego.sol` +
-//! `derive-lego-fs-challenges.mjs` y se regenere `shuffle_witness.json` con el
-//! mismo contexto (parte on-chain de #5, diferida). Abajo se pasa el domain_sep
-//! con el que se deberia regenerar el fixture.
+//! Estuvo `#[ignore]` desde #5 hasta 2026-09-18: el transcript FS de Rust lleva
+//! SEPARACION DE DOMINIO (`domain_sep`, ver `fs::derive_alpha_beta`) y el
+//! fixture era anterior. `derive-lego-fs-challenges.mjs` y
+//! `VerifyShufflingLego.sol::deriveChallenges` ya la llevan, y
+//! `shuffle_witness.json` es ahora el witness del lab regenerado con el contexto
+//! de abajo (`fs_domain_separator(31337, b"game-fixture", 0, 0)` ==
+//! `fs_domain_sep.json`). Si este test se pone rojo, el encoding Rust y el
+//! on-chain han divergido: es el unico gate que lo vigila.
 
 use ark_bn254::Fr;
 use core::str::FromStr;
@@ -29,7 +30,6 @@ static R1CS_BYTES: &[u8] = include_bytes!("../artifacts/shuffle_r1cs.bin");
 static WITNESS_JSON: &str = include_str!("../artifacts/shuffle_witness.json");
 
 #[test]
-#[ignore]
 fn alpha_beta_reproduces_onchain_encoding() {
     let r1cs = load_r1cs(R1CS_BYTES);
     let num_public = r1cs.num_public as usize;
