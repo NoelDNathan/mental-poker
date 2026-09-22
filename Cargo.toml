@@ -20,3 +20,10 @@ members = [
 exclude = [
     "lego-prover",
 ]
+
+# Arkworks 0.3 and 0.5 still pin tracing-subscriber 0.2 through their `std`
+# feature. That line is affected by RUSTSEC-2025-0055. These source-identical,
+# locally reviewed shims only raise that dependency to the patched 0.3 API.
+[patch.crates-io]
+ark-relations-03 = { package = "ark-relations", path = "vendor/ark-relations-0.3.0" }
+ark-relations-05 = { package = "ark-relations", path = "vendor/ark-relations-0.5.1" }

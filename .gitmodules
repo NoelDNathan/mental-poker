@@ -1,0 +1,30 @@
+[submodule "WebRTC-in-Rust"]
+	path = WebRTC-in-Rust
+	url = https://github.com/NoelDNathan/WebRTC-in-Rust.git
+[submodule "proof-essentials/licenses"]
+	path = proof-essentials/licenses
+	url = https://github.com/geometryresearch/proof-toolbox.git
+[submodule "workspace-ark05/ark-circom-witnesscalc"]
+	path = workspace-ark05/ark-circom-witnesscalc
+	url = https://github.com/NoelDNathan/ark-circom-witnesscalc.git
+[submodule "workspace-ark05/circom-compat"]
+	path = workspace-ark05/circom-compat
+	url = https://github.com/NoelDNathan/circom-compat.git
+[submodule "workspace-ark05/circom-compat2"]
+	path = workspace-ark05/circom-compat2
+	url = https://github.com/arkworks-rs/circom-compat.git
+[submodule "workspace-ark05/circom-witnesscalc"]
+	path = workspace-ark05/circom-witnesscalc
+	url = https://github.com/HarryR/circom-witnesscalc.git
+[submodule "workspace-ark05/circuits/calculate_winnersV3/circomlib"]
+	path = workspace-ark05/circuits/calculate_winnersV3/circomlib
+	url = https://github.com/iden3/circomlib.git
+[submodule "workspace-ark05/circuits/card_cancellation_v5/circomlib"]
+	path = workspace-ark05/circuits/card_cancellation_v5/circomlib
+	url = https://github.com/iden3/circomlib.git
+[submodule "workspace-ark05/circuits/shuffling/circomlib"]
+	path = workspace-ark05/circuits/shuffling/circomlib
+	url = https://github.com/iden3/circomlib.git
+[submodule "workspace-ark05/zk-reshuffle"]
+	path = workspace-ark05/zk-reshuffle
+	url = https://github.com/NoelDNathan/zk-reshuffle.git

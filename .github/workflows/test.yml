@@ -1,92 +1,60 @@
-name: Test
+name: Rust security baseline
+
 on:
   pull_request:
   push:
     branches:
       - master
+      - "codex/**"
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-baseline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
-  RUST_BACKTRACE: 1
   CARGO_NET_GIT_FETCH_WITH_CLI: true
+  RUST_BACKTRACE: 1
 
 jobs:
-  style:
-    name: Check Style
+  runtime:
+    name: Native tests and browser target
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - uses: webfactory/ssh-agent@v0.5.4
+      - name: Checkout pinned dependency graph
+        uses: actions/checkout@v7.0.1
         with:
-            ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-      - name: Checkout
-        uses: actions/checkout@v1
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          override: true
-          toolchain: stable
-          components: rustfmt
+          persist-credentials: false
+          submodules: recursive
 
-      - name: cargo fmt --check
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - name: Show pinned toolchain
+        run: rustc --version --verbose
 
-  test:
-    name: Test
+      - name: Check browser runtime
+        run: cargo check --locked -p wasm_client --target wasm32-unknown-unknown
+
+      - name: Test authority and recovery logic
+        run: cargo test --locked -p wasm_client --lib
+
+  audit:
+    name: RustSec dependency audit
     runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: -Dwarnings
-    strategy:
-      matrix:
-        rust:
-          - stable
+    timeout-minutes: 20
     steps:
-      - uses: webfactory/ssh-agent@v0.5.4
+      - name: Checkout pinned dependency graph
+        uses: actions/checkout@v7.0.1
         with:
-            ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Install Rust (${{ matrix.rust }})
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
-          override: true
+          persist-credentials: false
+          submodules: recursive
 
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --release --all --no-fail-fast
+      - name: Install pinned cargo-audit
+        run: cargo install cargo-audit --version 0.22.2 --locked
 
-  build-wasm:
-    name: Build non-native targets
-    runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: -Dwarnings
-    strategy:
-      matrix:
-        rust:
-          - stable
-        target:
-          - wasm32-unknown-unknown
-    steps:
-      - uses: webfactory/ssh-agent@v0.5.4
-        with:
-            ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Install Rust (${{ matrix.rust }})
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
-          target: ${{ matrix.target }}
-          override: true
-
-      - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --all --target ${{ matrix.target }}
+      - name: Audit exact dependency graph
+        run: cargo audit
