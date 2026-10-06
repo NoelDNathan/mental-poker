@@ -1,0 +1,18 @@
+[package]
+name = "poker-precompute"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Entrada del pool de precompute (cp_link de background): generacion y formato binario compartidos por el wasm_client y el prover nativo de escritorio."
+
+[dependencies]
+ark-serialize = "0.3.0"
+barnett-smart-card-protocol = { path = "../barnett-smart-card-protocol" }
+rand = "0.8.4"
+serde_json = "1.0"
+texas-holdem = { path = "../texas-holdem" }
+zk-reshuffle = { path = "../workspace-ark05/zk-reshuffle" }
+
+[dev-dependencies]
+ark-ec = "0.3.0"
+ark-ff = "0.3.0"

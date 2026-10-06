@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Dog Poker Club (spike)",
+  "version": "0.1.0",
+  "identifier": "club.dogpoker.desktop.spike",
+  "build": {
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "http://localhost:3000"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Dog Poker Club (spike)",
+        "width": 1400,
+        "height": 900
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["icons/icon.ico"]
+  }
+}
