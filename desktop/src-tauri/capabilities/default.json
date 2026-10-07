@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Spike: la mesa web remota (Next dev del lab) solo puede invocar precompute_fill.",
+  "description": "Sin comandos para las paginas: mesa y nucleo (protocolos propios = origen local) no tienen IPC. Solo core:default para la URL de desarrollo remota del lab.",
   "windows": [
     "main"
   ],
@@ -11,8 +11,7 @@
     ]
   },
   "permissions": [
-    "core:default",
-    "allow-precompute-fill"
+    "core:default"
   ],
   "local": false
 }

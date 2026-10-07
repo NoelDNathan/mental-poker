@@ -20,3 +20,5 @@ rayon = "1"
 poker-precompute = { path = "../../poker-precompute" }
 # Solo para nombrar el tipo `CardParameters` (poker-precompute no lo reexporta).
 texas-holdem = { path = "../../texas-holdem" }
+# Hash de engine.html (ruta por contenido del nucleo, bloque 2.2). Ya esta en Cargo.lock.
+sha2 = "0.10"
