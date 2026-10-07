@@ -6,7 +6,7 @@
 fn main() {
     tauri_build::try_build(
         tauri_build::Attributes::new()
-            .app_manifest(tauri_build::AppManifest::new().commands(&["precompute_fill"])),
+            .app_manifest(tauri_build::AppManifest::new().commands(&["precompute_fill", "spike_ping"])),
     )
     .expect("fallo en tauri-build");
 }

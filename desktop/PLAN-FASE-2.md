@@ -59,14 +59,43 @@ handlers, server actions ni rutas dinámicas. Bloquean `output: "export"`:
   sirve la CSP con esos hashes. El build web sigue con nonce (sin cambios).
 - **Prover nativo solo desde el núcleo**: el relleno del pool pasa del
   `LocalBackend` de la mesa al host del núcleo (`engine/`). La mesa no tiene
-  ningún comando de Tauri. Mecanismo preferido: capability de Tauri limitada al
-  origen `http://engine.localhost`. Si el IPC de Tauri no llega al iframe o no
-  se puede limitar por origen, plan B: un tercer protocolo `prover://` que el
-  núcleo llama con `fetch` y cuyo handler acepta solo `Origin:
-  http://engine.localhost` (cabecera que el JS no puede falsificar).
+  ningún comando de Tauri. Mecanismo: el protocolo `prover`, que el núcleo llama con `fetch` y cuyo
+  handler acepta solo `Origin: http://engine.localhost` (el IPC de Tauri no
+  distingue orígenes propios: ver «Resultado del spike 2.0»).
 - **Build "desktop"** de mesa y núcleo con su propio manifiesto (los
   orígenes entran en el build y cambian los hashes): se ancla on-chain igual
   que la web (`publishRelease`).
+
+## Resultado del spike 2.0 (2026-10-08): PASA, con un cambio de diseño
+
+App con `DPC_SPIKE_ORIGINS=desktop/spike-origins` y páginas mínimas
+(`desktop/spike-origins/{table,engine}`), leída por CDP:
+
+| Prueba | Resultado |
+|---|---|
+| Orígenes `http://table.localhost` y `http://engine.localhost` | distintos y serializables |
+| `crossOriginIsolated` + `SharedArrayBuffer` en los dos | sí |
+| Handshake `postMessage` (origen comprobado) + `MessageChannel` | sí |
+| La mesa lee el DOM del núcleo | no (bloqueado) |
+| Núcleo → protocolo `prover` | 200 |
+| Mesa → protocolo `prover` | rechazado por `Origin` (403, sin CORS) |
+| IPC de Tauri con capabilities por origen | **no sirve**: ver abajo |
+
+**El IPC de Tauri no puede ser la frontera entre mesa y núcleo.** Tauri trata
+como origen "local" cualquier protocolo propio registrado
+(`tauri-2.12.1/src/webview/mod.rs:1979`, `is_local_url`), y una capability
+con `remote.urls` sigue aplicándose a lo local salvo `local: false`. Con la
+capability del núcleo, la mesa también pudo invocar el comando. Decisión:
+
+- Todas las capabilities llevan `"local": false`: la mesa y el núcleo no
+  tienen **ningún** comando de Tauri (comprobado: el comando de la app y
+  `plugin:app|version` se rechazan por ACL desde los dos orígenes).
+- El único canal al nativo es el protocolo `prover`, cuyo handler exige
+  `Origin: http://engine.localhost` exacto (sin `Origin`, `null` u otro
+  origen: 403 y sin cabeceras CORS). El JS no puede falsificar `Origin`.
+- Efecto colateral: el modo de la Fase 1 (mesa en `localhost:3000` invocando
+  `precompute_fill` por IPC) queda sin permiso a propósito; lo sustituye el
+  bloque 2.3 (prover por el protocolo, desde el núcleo).
 
 ## Bloques
 

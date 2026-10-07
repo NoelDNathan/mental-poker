@@ -2,9 +2,17 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Spike: la mesa web remota (Next dev del lab) solo puede invocar precompute_fill.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "remote": {
-    "urls": ["http://localhost:3000/*"]
+    "urls": [
+      "http://localhost:3000/*"
+    ]
   },
-  "permissions": ["core:default", "allow-precompute-fill"]
+  "permissions": [
+    "core:default",
+    "allow-precompute-fill"
+  ],
+  "local": false
 }

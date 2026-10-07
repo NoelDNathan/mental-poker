@@ -12,6 +12,8 @@
 // Spike: SIN `windows_subsystem = "windows"` a proposito, para que el stdout con
 // los tiempos `[native][timing]` se vea (y se pueda redirigir) tambien en release.
 
+mod origins;
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -168,10 +170,39 @@ async fn precompute_fill(
     .map_err(|e| format!("hilo de precompute: {}", e))?
 }
 
+/// Fase 2 / spike 2.0: comando trivial para comprobar QUE origen puede invocar
+/// (la capability `engine` lo concede solo a `http://engine.localhost`).
+#[tauri::command]
+fn spike_ping() -> &'static str {
+    println!("[spike] ipc: spike_ping invocado");
+    "pong"
+}
+
 fn main() {
-    tauri::Builder::default()
-        .manage(Estado::default())
-        .invoke_handler(tauri::generate_handler![precompute_fill])
+    let mut builder = tauri::Builder::default().manage(Estado::default());
+
+    // DPC_SPIKE_ORIGINS=<dir con table/ y engine/>: mesa y nucleo por protocolos
+    // propios (Fase 2, bloque 2.0). Sin la variable, el spike de la Fase 1 tal cual.
+    let spike = std::env::var("DPC_SPIKE_ORIGINS").ok().map(PathBuf::from);
+    if let Some(dir) = spike.clone() {
+        let (table, engine) = (dir.join("table"), dir.join("engine"));
+        builder = builder
+            .register_uri_scheme_protocol("table", move |_ctx, req| origins::serve(&table, origins::Kind::Table, &req))
+            .register_uri_scheme_protocol("engine", move |_ctx, req| origins::serve(&engine, origins::Kind::Engine, &req))
+            .register_uri_scheme_protocol("prover", |_ctx, req| origins::prover(&req));
+    }
+
+    builder
+        .invoke_handler(tauri::generate_handler![precompute_fill, spike_ping])
+        .setup(move |app| {
+            if spike.is_some() {
+                use tauri::Manager;
+                let w = app.get_webview_window("main").ok_or("sin ventana main")?;
+                w.navigate(format!("{}/", origins::TABLE_ORIGIN).parse()?)?;
+                println!("[spike] mesa en {}/", origins::TABLE_ORIGIN);
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error al ejecutar la app Tauri");
 }
