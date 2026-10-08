@@ -53,16 +53,75 @@ fn main() {
         builder = builder.register_asynchronous_uri_scheme_protocol("prover", |_ctx, req, responder| prover::handle(req, responder));
     }
 
+    let jugador = parse_jugador(std::env::args().skip(1));
     builder
         .setup(move |app| {
-            if origenes_propios {
-                use tauri::Manager;
-                let w = app.get_webview_window("main").ok_or("sin ventana main")?;
-                w.navigate(format!("{TABLE_ORIGIN}/").parse()?)?;
-                println!("[desktop] mesa en {TABLE_ORIGIN}/");
-            }
+            use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+            // La ventana se crea aqui (no en tauri.conf) para poder darle una carpeta
+            // de datos propia por jugador.
+            let url = if origenes_propios {
+                let u = match jugador {
+                    Some(n) => format!("{TABLE_ORIGIN}/?dev={n}"),
+                    None => format!("{TABLE_ORIGIN}/"),
+                };
+                println!("[desktop] mesa en {u}");
+                WebviewUrl::External(u.parse()?)
+            } else {
+                WebviewUrl::App("index.html".into())
+            };
+            let mut w = WebviewWindowBuilder::new(app, "main", url).inner_size(1400.0, 900.0);
+            w = match jugador {
+                Some(n) => {
+                    let dir = app.path().app_local_data_dir()?.join(format!("jugador-{n}"));
+                    println!("[desktop] jugador {n}: datos en {}", dir.display());
+                    w.title(format!("Dog Poker Club (lab) - Jugador {n}")).data_directory(dir)
+                }
+                None => w.title("Dog Poker Club (lab)"),
+            };
+            w.build()?;
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error al ejecutar la app Tauri");
+}
+
+/// Mayor indice de cuenta del nodo Hardhat (20 cuentas por defecto).
+const MAX_JUGADOR: u32 = 19;
+
+/// `--jugador N` o `--jugador=N` (lab): abre la mesa con la cuenta N de la wallet
+/// dev (`?dev=N`, que la build de release ignora) y guarda vault, K y sesion en una
+/// carpeta propia, para poder abrir varios jugadores en el mismo PC sin que se
+/// pisen. Sin el argumento, `DPC_JUGADOR`.
+fn parse_jugador(args: impl Iterator<Item = String>) -> Option<u32> {
+    let args: Vec<String> = args.collect();
+    let raw = args
+        .iter()
+        .enumerate()
+        .find_map(|(i, a)| match a.strip_prefix("--jugador") {
+            Some("") => args.get(i + 1).cloned(),
+            Some(rest) => rest.strip_prefix('=').map(str::to_string),
+            None => None,
+        })
+        .or_else(|| std::env::var("DPC_JUGADOR").ok())?;
+    raw.trim().parse::<u32>().ok().filter(|n| *n <= MAX_JUGADOR)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_jugador;
+
+    fn p(args: &[&str]) -> Option<u32> {
+        parse_jugador(args.iter().map(|s| s.to_string()))
+    }
+
+    #[test]
+    fn argumento_jugador() {
+        assert_eq!(p(&["--jugador", "1"]), Some(1));
+        assert_eq!(p(&["--jugador=0"]), Some(0));
+        assert_eq!(p(&["x", "--jugador", "19"]), Some(19));
+        assert_eq!(p(&["--jugador", "20"]), None);
+        assert_eq!(p(&["--jugador", "-1"]), None);
+        assert_eq!(p(&["--jugador", "uno"]), None);
+        assert_eq!(p(&["--jugadorx=1"]), None);
+    }
 }
