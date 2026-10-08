@@ -29,15 +29,15 @@ use serve::common::TABLE_ORIGIN;
 fn main() {
     let mut builder = tauri::Builder::default();
 
-    // Con DPC_TABLE_DIR + DPC_ENGINE_DIST + DPC_PUBLIC_DIR (+ DPC_ENGINE_CONNECT)
-    // sirven los handlers de `serve/` (port de engine/server.mjs y de las
-    // cabeceras de la mesa). Sin ellas, DPC_SPIKE_ORIGINS=<dir con table/ y
-    // engine/> mantiene el spike 2.0 (desktop/spike-origins).
-    // TODO(2.4): dirs desde resource_dir de Tauri + `desktop-config.json` empaquetado.
-    let desktop = serve::DesktopDirs::from_env();
+    // Mesa y nucleo desde la carpeta de app (`serve::DesktopDirs::discover`: la
+    // instalada junto al .exe, o DPC_APP_DIR / DPC_* en desarrollo). Sin ella,
+    // DPC_SPIKE_ORIGINS=<dir con table/ y engine/> mantiene el spike 2.0.
+    let desktop = serve::DesktopDirs::discover();
     let spike = std::env::var("DPC_SPIKE_ORIGINS").ok().map(PathBuf::from);
     let origenes_propios = desktop.is_some() || spike.is_some();
     if let Some(dirs) = desktop {
+        println!("[desktop] mesa {} | nucleo {}", dirs.table_dir.display(), dirs.engine_dist.display());
+        prover::set_artifacts_dir(dirs.precompute_dir());
         let (table, engine) = dirs.build();
         let (table, engine) = (Arc::new(table), Arc::new(engine));
         builder = builder

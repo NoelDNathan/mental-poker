@@ -1,27 +1,30 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Dog Poker Club (spike)",
-  "version": "0.1.0",
-  "identifier": "club.dogpoker.desktop.spike",
+  "productName": "Dog Poker Club Lab",
+  "version": "0.2.0",
+  "identifier": "club.dogpoker.desktop.lab",
   "build": {
-    "devUrl": "http://localhost:3000",
-    "frontendDist": "http://localhost:3000"
+    "frontendDist": "../boot"
   },
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "Dog Poker Club (spike)",
+        "title": "Dog Poker Club (lab)",
         "width": 1400,
         "height": 900
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'none'; style-src 'unsafe-inline'"
     }
   },
   "bundle": {
-    "active": false,
-    "icon": ["icons/icon.ico"]
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
+    "resources": {
+      "../stage/app/": "app/"
+    }
   }
 }

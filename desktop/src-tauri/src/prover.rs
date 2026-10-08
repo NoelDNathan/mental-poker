@@ -32,8 +32,15 @@ use texas_holdem::CardParameters;
 
 use crate::serve::common::ENGINE_ORIGIN;
 
-/// Directorio por defecto de los artefactos (los mismos que sirve el lab web).
-/// TODO(2.4): resource_dir de la app empaquetada.
+/// Directorio de los artefactos: `DPC_PRECOMPUTE_DIR`, si no el de la carpeta de app
+/// (`set_artifacts_dir`), si no los mismos que sirve el lab web.
+static DIR_ARTEFACTOS: OnceLock<PathBuf> = OnceLock::new();
+
+/// Fija el directorio de artefactos de la app (una vez, al arrancar).
+pub fn set_artifacts_dir(dir: PathBuf) {
+    let _ = DIR_ARTEFACTOS.set(dir);
+}
+
 const DIR_ARTEFACTOS_POR_DEFECTO: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../.wt-secure-frontend/public/precompute/vhyb"
@@ -79,7 +86,11 @@ fn leer(dir: &Path, nombre: &str) -> Result<Vec<u8>, String> {
 
 fn cargar() -> Result<Cargado, String> {
     let t0 = Instant::now();
-    let dir = PathBuf::from(std::env::var("DPC_PRECOMPUTE_DIR").unwrap_or_else(|_| DIR_ARTEFACTOS_POR_DEFECTO.to_string()));
+    let dir = std::env::var("DPC_PRECOMPUTE_DIR")
+        .map(PathBuf::from)
+        .ok()
+        .or_else(|| DIR_ARTEFACTOS.get().cloned())
+        .unwrap_or_else(|| PathBuf::from(DIR_ARTEFACTOS_POR_DEFECTO));
     let artefactos = PrecomputeArtifacts {
         circom_wasm: leer(&dir, "precompute_circom.wasm")?,
         circom_r1cs: leer(&dir, "precompute_circom.r1cs")?,

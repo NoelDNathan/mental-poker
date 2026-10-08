@@ -1,15 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Sin comandos para las paginas: mesa y nucleo (protocolos propios = origen local) no tienen IPC. Solo core:default para la URL de desarrollo remota del lab.",
+  "description": "Sin comandos: mesa y nucleo (protocolos propios = origen local) no tienen IPC; local=false y sin URLs remotas.",
   "windows": [
     "main"
   ],
-  "remote": {
-    "urls": [
-      "http://localhost:3000/*"
-    ]
-  },
   "permissions": [
     "core:default"
   ],

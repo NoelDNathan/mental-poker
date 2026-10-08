@@ -16,3 +16,6 @@
 key
 key.pub
 */node_modules
+
+# Fase 2: carpeta de app reunida por desktop/scripts/stage-app.mjs
+/desktop/stage/
