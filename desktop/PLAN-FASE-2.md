@@ -158,3 +158,18 @@ Cómo se monta (lab):
 4. Cada instancia: `DPC_APP_DIR=<stage/app> WEBVIEW2_USER_DATA_FOLDER=<dir propio> WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=922X dpc-desktop.exe`.
 
 Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favicon); el registro de seguridad ancla UN solo digest de release, así que web y escritorio no pueden estar anclados a la vez (habrá que anclar un manifiesto conjunto o uno por plataforma).
+
+## Variante de red local (2026-10-08)
+
+Para jugar con otra persona en la misma red: el nodo y la señalización corren
+en un PC (Hardhat con `npx hardhat node --hostname 0.0.0.0`; la señalización
+ya escucha en 0.0.0.0) y la build apunta a su IP de red.
+
+1. Variables de `desktop-lab.env` cambiando `127.0.0.1` por la IP (p. ej.
+   `192.168.1.90`) y `ENGINE_OUT_DIR=engine-dist-lan`; mismas builds de núcleo y mesa.
+2. `stage-app.mjs ... --engine ../.wt-secure-frontend/engine-dist-lan --out desktop/stage/app-lan --connect "ws://<IP>:2794 http://<IP>:8545"`.
+3. `npx @tauri-apps/cli@2.12.1 build --config tauri.lan.conf.json` → "Dog Poker Club LAN" (otro identificador: convive con la de lab).
+4. En el PC del nodo, regla de firewall (admin) para 8545 y 2794 solo desde la subred local.
+
+E2E (`E2E_WS_URL=ws://<IP>:2794`): mano en 51 s con dos instancias por la IP de red.
+La IP va dentro de la build: si el router la cambia, hay que regenerarla.

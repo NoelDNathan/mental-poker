@@ -1,0 +1,9 @@
+{
+  "productName": "Dog Poker Club LAN",
+  "identifier": "club.dogpoker.desktop.lan",
+  "bundle": {
+    "resources": {
+      "../stage/app-lan/": "app/"
+    }
+  }
+}
