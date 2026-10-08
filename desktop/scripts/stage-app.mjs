@@ -88,6 +88,8 @@ execFileSync(process.execPath, [join(fe, "scripts", "release-manifest.mjs"), "--
   stdio: "inherit",
 });
 copyFileSync(manifest, join(out, "table", "release-manifest.json"));
+// El webview pide /favicon.ico por su cuenta; sin el, un 404 en cada carga.
+copyFileSync(new URL("../src-tauri/icons/icon.ico", import.meta.url), join(out, "table", "favicon.ico"));
 
 writeFileSync(join(out, "desktop-config.json"), JSON.stringify({ engineConnect: connect }, null, 2) + "\n");
 console.log(`[stage] ${linked} enlazados, ${copied} copiados, ${(bytes / 1e6).toFixed(1)} MB`);
