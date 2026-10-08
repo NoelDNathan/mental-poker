@@ -110,16 +110,16 @@ capability del núcleo, la mesa también pudo invocar el comando. Decisión:
 | 2.6 | Updater de Tauri firmado + verificación del manifiesto anclado antes de aplicar | Opus | 2.4, D3 |
 | 2.7 | Residuales nativos (`prove_shuffle`/`prove_reshuffle` por el mismo canal del prover) — solo si 2.5 muestra que el turno pesa | Sonnet + Opus | 2.5 |
 
-## Decisiones del usuario (pendientes; se avanza con el resto)
+## Decisiones del usuario (2026-10-08)
 
-| # | Decisión | Por defecto mientras tanto |
+| # | Decisión | Estado |
 |---|---|---|
-| D1 | Wallet en escritorio: WalletConnect (móvil escanea QR), thirdweb in-app (email/Google), o ambas | Lab con la wallet dev; nada de wallet real hasta decidir |
-| D2 | Plataformas además de Windows (macOS/Linux necesitan otra estrategia de orígenes: esquema propio da origen `null`) | Solo Windows |
-| D3 | Custodia de la clave de firma del updater y certificado de firma de código de Windows (coste anual) | Instalador sin firmar, updater desactivado |
-| D4 | Núcleo nativo completo (semanas; poca ganancia de rendimiento según los datos) | No se empieza |
-| D5 | K en el keychain del sistema o en el vault del núcleo (como en web) | Vault del núcleo |
-| D6 | Distribución (descarga directa, tienda) | Ninguna: solo builds locales |
+| D1 | Wallet | **Decidido el objetivo**: registrarse con email (o teléfono/Google) o con MetaMask y jugar sin pop-ups. Diseño en `.wt-secure-frontend/docs/security/CUENTAS-WALLETS-SIN-POPUPS.md`. No bloquea la Fase 2: mientras tanto, wallet dev en el lab |
+| D2 | Plataformas | **Solo Windows** por ahora |
+| D3 | Firma de código y del updater | Se repiensa más adelante. Mientras: instalador sin firmar, updater apagado |
+| D4 | Núcleo nativo completo | Se repiensa más adelante. Mientras: no se empieza |
+| D5 | K en el keychain del sistema | Se repiensa más adelante. Mientras: vault del núcleo |
+| D6 | Distribución | Se repiensa más adelante. Mientras: solo builds locales |
 
 ## Wallet en el lab de escritorio
 
