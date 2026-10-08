@@ -137,3 +137,24 @@ build de release no la incluye.
 - Fuente de verdad intacta: contrato = fondos, protocolo = cartas, UI =
   orquestación. Tauri no decide nada del juego.
 - Nunca registrar `r_prime`, `link_v`, cartas sin revelar ni material de K.
+
+## Estado (2026-10-08)
+
+| Bloque | Estado | Commits |
+|---|---|---|
+| 2.0 | Hecho | wasm 519cca7 |
+| 2.1 | Hecho: export de 6,3 MiB, CSP con 3 hashes | FE b611e7f |
+| 2.2 | Hecho | wasm 43c1e10 |
+| 2.3 | Hecho | wasm 43c1e10, FE 07a5c26 |
+| 2.4 | Carpeta de app y config hechas (wasm d81160b); falta generar el instalador NSIS con la CLI de Tauri | |
+| 2.5 | **VERDE**: `e2e/desktop-app-hand.spec.ts`, 2 instancias empaquetadas, 1 mano en 158 s, aislamiento comprobado, 14 entradas del pool nativas (9–15 s cada una con las dos instancias compitiendo por 8 hilos) | FE (ver git log) |
+
+Cómo se monta (lab):
+1. Variables de `desktop-lab.env` (ENGINE_ORIGIN=http://engine.localhost,
+   DEV_WALLET=1, DESKTOP_LAB=1, CORE_BETTING=1, NATIVE_PROVER=1, canal lab,
+   ENGINE_TABLE_ORIGINS=http://table.localhost, ENGINE_OUT_DIR=engine-dist-desktop).
+2. FE: `npx vite build --config engine/vite.config.ts` y `npm run build:desktop-table` (~7 min).
+3. `node desktop/scripts/stage-app.mjs --fe ../.wt-secure-frontend --table ../.wt-secure-frontend/out-desktop --engine ../.wt-secure-frontend/engine-dist-desktop --out desktop/stage/app --connect "ws://127.0.0.1:2794 http://127.0.0.1:8545"`.
+4. Cada instancia: `DPC_APP_DIR=<stage/app> WEBVIEW2_USER_DATA_FOLDER=<dir propio> WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=922X dpc-desktop.exe`.
+
+Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favicon); el registro de seguridad ancla UN solo digest de release, así que web y escritorio no pueden estar anclados a la vez (habrá que anclar un manifiesto conjunto o uno por plataforma).
