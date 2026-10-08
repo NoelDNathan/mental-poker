@@ -146,7 +146,7 @@ build de release no la incluye.
 | 2.1 | Hecho: export de 6,3 MiB, CSP con 3 hashes | FE b611e7f |
 | 2.2 | Hecho | wasm 43c1e10 |
 | 2.3 | Hecho | wasm 43c1e10, FE 07a5c26 |
-| 2.4 | Carpeta de app y config hechas (wasm d81160b); falta generar el instalador NSIS con la CLI de Tauri | |
+| 2.4 | Hecho: instalador NSIS sin firmar de 63 MiB (`npx @tauri-apps/cli@2.12.1 build` en desktop/src-tauri) | wasm d81160b |
 | 2.5 | **VERDE**: `e2e/desktop-app-hand.spec.ts`, 2 instancias empaquetadas, 1 mano en 158 s, aislamiento comprobado, 14 entradas del pool nativas (9–15 s cada una con las dos instancias compitiendo por 8 hilos) | FE (ver git log) |
 
 Cómo se monta (lab):
