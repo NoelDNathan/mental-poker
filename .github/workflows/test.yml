@@ -28,10 +28,16 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout pinned dependency graph
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
           submodules: recursive
+
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
 
       - name: Show pinned toolchain
         run: rustc --version --verbose
@@ -48,10 +54,16 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout pinned dependency graph
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
           submodules: recursive
+
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
 
       - name: Install pinned cargo-audit
         run: cargo install cargo-audit --version 0.22.2 --locked
