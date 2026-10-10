@@ -4272,6 +4272,7 @@ dependencies = [
  "elliptic-curve",
  "once_cell",
  "sha2",
+ "signature",
 ]
 
 [[package]]
@@ -6652,11 +6653,13 @@ dependencies = [
  "base64 0.22.1",
  "futures",
  "hmac",
+ "k256",
  "log",
  "rand 0.8.8",
  "serde",
  "serde_json",
  "sha1 0.10.6",
+ "sha3",
  "shared-protocol",
  "simplelog",
 ]
