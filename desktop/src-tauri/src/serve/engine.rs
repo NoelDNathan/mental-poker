@@ -1,5 +1,5 @@
 // Fase 2 / bloque 2.2: protocolo `engine` (http://engine.localhost). Port fiel de
-// `.wt-secure-frontend/engine/server.mjs` (Gate 7): servidor ESTATICO del nucleo.
+// `frontend-production/engine/server.mjs` (Gate 7): servidor ESTATICO del nucleo.
 //
 // - Ruta por contenido: `/r/<sha256 de engine.html>/...` solo se sirve si el hash
 //   coincide con el de `engine-dist/engine.html` (otro hash: 404 "otra release").

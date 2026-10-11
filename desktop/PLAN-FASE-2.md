@@ -114,7 +114,7 @@ capability del núcleo, la mesa también pudo invocar el comando. Decisión:
 
 | # | Decisión | Estado |
 |---|---|---|
-| D1 | Wallet | **Decidido el objetivo**: registrarse con email (o teléfono/Google) o con MetaMask y jugar sin pop-ups. Diseño en `.wt-secure-frontend/docs/security/CUENTAS-WALLETS-SIN-POPUPS.md`. No bloquea la Fase 2: mientras tanto, wallet dev en el lab |
+| D1 | Wallet | **Decidido el objetivo**: registrarse con email (o teléfono/Google) o con MetaMask y jugar sin pop-ups. Diseño en `frontend-production/docs/security/CUENTAS-WALLETS-SIN-POPUPS.md`. No bloquea la Fase 2: mientras tanto, wallet dev en el lab |
 | D2 | Plataformas | **Solo Windows** por ahora |
 | D3 | Firma de código y del updater | Se repiensa más adelante. Mientras: instalador sin firmar, updater apagado |
 | D4 | Núcleo nativo completo | Se repiensa más adelante. Mientras: no se empieza |
@@ -182,8 +182,11 @@ Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favico
   consola en esa corrida; el spec ahora lo admite con `E2E_CONSOLE_DIR` (FE `c407d34`).
   Intermitente abierto.
 - Instaladas en el PC (modo usuario, `/S` desde PowerShell): Lab 0.2.1 y LAN 0.2.1.
-- Pendiente de la limpieza de worktrees: si se quita `.wt-secure-*`, actualizar el fallback
-  `DIR_ARTEFACTOS_POR_DEFECTO` de `src-tauri/src/prover.rs` y las rutas de este plan.
+- Limpieza de worktrees hecha (2026-10-11): `.wt-secure-*` y `.wt-audit-*` eliminados; los checkouts
+  principales (`frontend-production`, `smartcontracts`, `mental-poker-reshuffle` y sus repos anidados)
+  están en `codex/secure-poker-runtime`. El fallback `DIR_ARTEFACTOS_POR_DEFECTO` de `prover.rs` apunta
+  a `frontend-production/public/precompute/vhyb`; `--fe` de `stage-app.mjs` es `../frontend-production`.
+  Instaladores 0.2.1 guardados en `backups/limpieza-2026-10-11/instaladores/`.
 
 ## Variante de red local (2026-10-08)
 

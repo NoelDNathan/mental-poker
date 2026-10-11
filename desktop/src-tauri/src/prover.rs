@@ -43,7 +43,7 @@ pub fn set_artifacts_dir(dir: PathBuf) {
 
 const DIR_ARTEFACTOS_POR_DEFECTO: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../../.wt-secure-frontend/public/precompute/vhyb"
+    "/../../../frontend-production/public/precompute/vhyb"
 );
 
 /// Cota de entradas por peticion (el pool del nucleo es pequeno).

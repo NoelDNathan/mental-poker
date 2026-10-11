@@ -15,7 +15,7 @@
  * dentro de los directorios copiados (salvo las raices pedidas).
  *
  * Uso:
- *   node desktop/scripts/stage-app.mjs --fe <.wt-secure-frontend> \
+ *   node desktop/scripts/stage-app.mjs --fe <frontend-production> \
  *     --table <export de la mesa> --engine <engine-dist> --out <dir> \
  *     --connect "ws://127.0.0.1:2794 http://127.0.0.1:8545" [--version 1]
  */

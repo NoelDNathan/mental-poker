@@ -31,7 +31,7 @@ target del workspace:
 
 ```bash
 cd desktop/src-tauri
-CARGO_TARGET_DIR="<raiz>/.wt-secure-wasm/target" cargo build --release
+CARGO_TARGET_DIR="<raiz>/mental-poker-reshuffle/target" cargo build --release
 # .exe: <target>/release/dpc-desktop.exe
 ```
 
@@ -42,7 +42,7 @@ Antes de lanzar hay que tener el frontend del lab sirviendo en `http://localhost
 
 - `DPC_PRECOMPUTE_DIR`: directorio con `precompute_circom.wasm`, `precompute_circom.r1cs`,
   `precompute_pk.bin`, `precompute_lego.r1cs` y `precompute.graph`. Por defecto
-  `.wt-secure-frontend/public/precompute/vhyb`. Se cargan una sola vez, en la primera llamada.
+  `frontend-production/public/precompute/vhyb`. Se cargan una sola vez, en la primera llamada.
 - `DPC_NATIVE_THREADS`: hilos del pool rayon propio (por defecto `available_parallelism`).
 
 ## Conducir el webview con Playwright
