@@ -167,13 +167,21 @@ Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favico
   imported module: blob:...` y el núcleo no arranca.
 - `desktop-app-hand` VERDE con dos instancias empaquetadas: mano en 61 s, aislamiento intacto.
   El ticket de sala del #3 (RoomJoin firmado por la wallet dev) funciona en la app.
-- Instalador regenerado: `target/release/bundle/nsis/Dog Poker Club Lab_0.2.1_x64-setup.exe`
-  (misma versión que el instalado; no se ha reinstalado en el PC).
 - El 404 menor ya no aparece (0 respuestas >= 400 al cargar la mesa).
-- **Variante LAN BLOQUEADA por el #20**: `networkManifest.ts` exige `http`/`ws` solo en loopback
-  y la build LAN usa `http://192.168.1.90:8545` / `ws://...:2794` (el export de Next falla al
-  prerender). Pendiente de decisión: permitir IP privadas solo en el canal `lab`, o servir el
-  nodo y la señalización por TLS en la red local. El instalador LAN sigue siendo el del 2026-10-08.
+- **Variante LAN desbloqueada** (FE `3de8089`): en el canal `lab` (solo cadenas locales, sin
+  dinero real) `networkManifest.ts` admite `http`/`ws` hacia una IPv4 privada escrita como literal
+  (10/8, 172.16/12, 192.168/16); nombres DNS y cualquier otro canal siguen exigiendo loopback o
+  TLS. Test nuevo en `networkManifest.test.ts`.
+- Dependencias del FE reinstaladas con `pnpm install --frozen-lockfile` (el `node_modules` de
+  `.wt-secure-frontend` era anterior al lockfile) y lockfile fijado a LF (FE `03c1db2`). Las dos
+  variantes se reconstruyeron con ellas: `Dog Poker Club Lab_0.2.1_x64-setup.exe` y
+  `Dog Poker Club LAN_0.2.1_x64-setup.exe` (CSP del staging: Lab hacia 127.0.0.1, LAN hacia
+  192.168.1.90).
+- `desktop-app-hand` con la build nueva: 3 corridas, 2 verdes (3 manos, 82–108 s por mano) y 1 roja:
+  `setCommunityCardsOptimistic consensus timed out: 1/2` en el flop (P1 no firmó). Sin volcado de
+  consola en esa corrida; el spec ahora lo admite con `E2E_CONSOLE_DIR` (FE `c407d34`).
+  Intermitente abierto.
+- Instaladas en el PC (modo usuario, `/S` desde PowerShell): Lab 0.2.1 y LAN 0.2.1.
 - Pendiente de la limpieza de worktrees: si se quita `.wt-secure-*`, actualizar el fallback
   `DIR_ARTEFACTOS_POR_DEFECTO` de `src-tauri/src/prover.rs` y las rutas de este plan.
 
