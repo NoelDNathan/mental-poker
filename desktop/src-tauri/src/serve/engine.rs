@@ -57,8 +57,10 @@ impl EngineServer {
         }
         let csp = [
             "default-src 'none'".to_string(),
-            "script-src 'self' 'wasm-unsafe-eval'".to_string(),
-            "worker-src 'self'".to_string(),
+            // blob:: el glue del motor se ejecuta desde los bytes verificados
+            // (modulo blob, #1 auditoria 2026-10), como en engine/server.mjs.
+            "script-src 'self' 'wasm-unsafe-eval' blob:".to_string(),
+            "worker-src 'self' blob:".to_string(),
             format!("connect-src {}", sources.join(" ")),
             "style-src 'self'".to_string(),
             "img-src 'self'".to_string(),
@@ -237,8 +239,8 @@ mod tests {
         let csp = hdr(&r, "content-security-policy").unwrap();
         for d in [
             "default-src 'none'",
-            "script-src 'self' 'wasm-unsafe-eval'",
-            "worker-src 'self'",
+            "script-src 'self' 'wasm-unsafe-eval' blob:",
+            "worker-src 'self' blob:",
             "connect-src 'self' ws://127.0.0.1:2796 http://127.0.0.1:8545 http://prover.localhost",
             "style-src 'self'",
             "img-src 'self'",
