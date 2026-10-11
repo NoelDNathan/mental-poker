@@ -159,6 +159,24 @@ Cómo se monta (lab):
 
 Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favicon); el registro de seguridad ancla UN solo digest de release, así que web y escritorio no pueden estar anclados a la vez (habrá que anclar un manifiesto conjunto o uno por plataforma).
 
+### 2026-10-11: app reconstruida con la auditoría 2026-10
+
+- Línea segura con la auditoría fusionada (FE `2553e1d`, wasm `3e125f1`/WebRTC `4f7e3d8`).
+- Arreglo propio de la app: CSP del núcleo con `blob:` (wasm `66c184b`), necesario desde el #1
+  (glue del motor ejecutado desde los bytes verificados). Sin él: `Failed to fetch dynamically
+  imported module: blob:...` y el núcleo no arranca.
+- `desktop-app-hand` VERDE con dos instancias empaquetadas: mano en 61 s, aislamiento intacto.
+  El ticket de sala del #3 (RoomJoin firmado por la wallet dev) funciona en la app.
+- Instalador regenerado: `target/release/bundle/nsis/Dog Poker Club Lab_0.2.1_x64-setup.exe`
+  (misma versión que el instalado; no se ha reinstalado en el PC).
+- El 404 menor ya no aparece (0 respuestas >= 400 al cargar la mesa).
+- **Variante LAN BLOQUEADA por el #20**: `networkManifest.ts` exige `http`/`ws` solo en loopback
+  y la build LAN usa `http://192.168.1.90:8545` / `ws://...:2794` (el export de Next falla al
+  prerender). Pendiente de decisión: permitir IP privadas solo en el canal `lab`, o servir el
+  nodo y la señalización por TLS en la red local. El instalador LAN sigue siendo el del 2026-10-08.
+- Pendiente de la limpieza de worktrees: si se quita `.wt-secure-*`, actualizar el fallback
+  `DIR_ARTEFACTOS_POR_DEFECTO` de `src-tauri/src/prover.rs` y las rutas de este plan.
+
 ## Variante de red local (2026-10-08)
 
 Para jugar con otra persona en la misma red: el nodo y la señalización corren
