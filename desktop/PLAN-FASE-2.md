@@ -199,6 +199,18 @@ Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favico
 - `desktop-app-hand` verde con la build nueva (ventana 1264x632 a 1,5x, sin scroll); Lab y LAN 0.2.1
   reinstaladas. Build desde los checkouts principales: `target` en `mental-poker-reshuffle/target`.
 
+### 2026-10-13 (2): columna "tu mano" y repaso visual (FE `27143e0`)
+
+- El asiento propio sale del tapete; a la derecha, un panel con tus datos (saldo, apuesta, de quien es
+  el turno) y el dock del nucleo vertical (380x376: cartas arriba, panel debajo). En ventanas estrechas
+  el dock vuelve a ser apaisado (440x260) debajo de la mesa; el nucleo elige por el alto del iframe.
+- Fichas de apuesta sobre el tapete, cinco huecos para comunitarias, bote compacto, etiquetas en
+  espanol (tambien el nombre de la jugada en el nucleo). `core-betting-panel` verde.
+- Instaladas Lab y LAN. `desktop-app-hand` hoy: 1 verde y 2 rojos por el intermitente de siempre:
+  P1 se queda en `[startGame][guard] falta=[cards, encGenerator]` 180 s aunque la mano avanza, y
+  mientras tanto no firma `setCommunityCardsOptimistic` (flop: consenso 1/2; river: firma tardia y
+  el contrato revierte `PokerGuard_Expired`). Pendiente de investigar; no es del diseño nuevo.
+
 ## Variante de red local (2026-10-08)
 
 Para jugar con otra persona en la misma red: el nodo y la señalización corren
