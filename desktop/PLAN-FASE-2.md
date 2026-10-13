@@ -188,6 +188,17 @@ Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favico
   a `frontend-production/public/precompute/vhyb`; `--fe` de `stage-app.mjs` es `../frontend-production`.
   Instaladores 0.2.1 guardados en `backups/limpieza-2026-10-11/instaladores/`.
 
+### 2026-10-13: mesa y ventana arregladas en el escritorio
+
+- Sintoma (usuario): cartas propias y panel de apuesta encima de la mesa y moviendose con el scroll.
+  Causas: (1) en B4 el dock del nucleo iba `position: fixed` abajo, sobre el asiento propio y el bote;
+  (2) la ventana medía 1400x900 logicos y con la escala de Windows al 150 % no cabia en la pantalla.
+- FE `789647c`: la mesa se escala para caber (`Table fit`) y el dock va en columna propia (derecha
+  desde `lg`, debajo en estrecho); sin scroll. `core-betting-panel` verde (mano + clickjacking).
+- wasm `5ea2476`: ventana ajustada al area util del monitor (min 900x600), con test unitario.
+- `desktop-app-hand` verde con la build nueva (ventana 1264x632 a 1,5x, sin scroll); Lab y LAN 0.2.1
+  reinstaladas. Build desde los checkouts principales: `target` en `mental-poker-reshuffle/target`.
+
 ## Variante de red local (2026-10-08)
 
 Para jugar con otra persona en la misma red: el nodo y la señalización corren
