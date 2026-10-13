@@ -69,7 +69,19 @@ fn main() {
             } else {
                 WebviewUrl::App("index.html".into())
             };
-            let mut w = WebviewWindowBuilder::new(app, "main", url).inner_size(1400.0, 900.0);
+            // 1400x900 logicos no caben en una pantalla de 1080 px con escala 125 %
+            // (la parte de abajo, donde estan las cartas y el panel, quedaba
+            // fuera): la ventana se ajusta al area util del monitor.
+            let area = app.primary_monitor().ok().flatten().map(|m| {
+                let s = m.scale_factor();
+                let r = m.work_area();
+                (f64::from(r.size.width) / s, f64::from(r.size.height) / s)
+            });
+            let (ancho, alto) = tamano_ventana(area);
+            let mut w = WebviewWindowBuilder::new(app, "main", url)
+                .inner_size(ancho, alto)
+                .min_inner_size(VENTANA_MIN.0, VENTANA_MIN.1)
+                .center();
             w = match jugador {
                 Some(n) => {
                     let dir = app.path().app_local_data_dir()?.join(format!("jugador-{n}"));
@@ -83,6 +95,24 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error al ejecutar la app Tauri");
+}
+
+/// Tamano preferido y minimo del interior de la ventana, en pixeles logicos.
+const VENTANA_MAX: (f64, f64) = (1400.0, 900.0);
+const VENTANA_MIN: (f64, f64) = (900.0, 600.0);
+/// Margen para el marco y la barra de titulo de Windows (fuera de inner_size).
+const MARCO: (f64, f64) = (16.0, 48.0);
+
+/// Interior de la ventana: el preferido, recortado al area util del monitor
+/// (sin la barra de tareas) menos el marco. Sin monitor conocido, el preferido.
+fn tamano_ventana(area_logica: Option<(f64, f64)>) -> (f64, f64) {
+    match area_logica {
+        Some((w, h)) => (
+            VENTANA_MAX.0.min(w - MARCO.0).max(VENTANA_MIN.0),
+            VENTANA_MAX.1.min(h - MARCO.1).max(VENTANA_MIN.1),
+        ),
+        None => VENTANA_MAX,
+    }
 }
 
 /// Mayor indice de cuenta del nodo Hardhat (20 cuentas por defecto).
@@ -108,7 +138,7 @@ fn parse_jugador(args: impl Iterator<Item = String>) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_jugador;
+    use super::{parse_jugador, tamano_ventana};
 
     fn p(args: &[&str]) -> Option<u32> {
         parse_jugador(args.iter().map(|s| s.to_string()))
@@ -123,5 +153,16 @@ mod tests {
         assert_eq!(p(&["--jugador", "-1"]), None);
         assert_eq!(p(&["--jugador", "uno"]), None);
         assert_eq!(p(&["--jugadorx=1"]), None);
+    }
+
+    #[test]
+    fn ventana_cabe_en_el_monitor() {
+        // 1920x1080 al 125 %: area util 1536x834 logicos -> el alto se recorta.
+        assert_eq!(tamano_ventana(Some((1536.0, 834.0))), (1400.0, 786.0));
+        // Pantalla grande: el tamano preferido.
+        assert_eq!(tamano_ventana(Some((2560.0, 1400.0))), (1400.0, 900.0));
+        // Pantalla diminuta: nunca por debajo del minimo.
+        assert_eq!(tamano_ventana(Some((800.0, 500.0))), (900.0, 600.0));
+        assert_eq!(tamano_ventana(None), (1400.0, 900.0));
     }
 }
