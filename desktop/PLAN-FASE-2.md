@@ -211,6 +211,24 @@ Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favico
   mientras tanto no firma `setCommunityCardsOptimistic` (flop: consenso 1/2; river: firma tardia y
   el contrato revierte `PokerGuard_Expired`). Pendiente de investigar; no es del diseño nuevo.
 
+### 2026-10-14: rediseño de la mesa (FE `7d45661`..`6039724`)
+
+- La columna "tu mano" se sustituye por una barra inferior: el iframe del nucleo es transparente y va
+  desde 300 px a la izquierda del centro de la mesa hasta el borde derecho (cartas en abanico en el
+  centro, anillo de segundos del turno a su izquierda, panel de apuesta abajo a la derecha). Por
+  debajo de `lg` va apilado. La placa del jugador la pinta la mesa bajo las cartas.
+- La barra NO debe tocar ninguna capa que vaya por encima del iframe: IntersectionObserver v2 da por
+  tapado el iframe entero y `clickGuard` rechaza todas las apuestas ("Algo tapa o recorta el panel").
+  Lo provocaba el indicador de desarrollo de Next (abajo a la izquierda) con la barra a todo lo ancho.
+- Panel nuevo (atajos con importe, slider, "Subir a $X"), acciones preparadas en el turno de otro
+  (presencia `human-armed`), asientos con avatares de perro SVG, cartas a 4 colores y aviso de fin de
+  mano con "Ver mano" y "Descansar". Verificado en el lab web a 1264x632, 1920x1080, 1024x768 y 390x844.
+- Suite B4 7/7 (FE `36d5eec`: el arnes acota sus pulsaciones a `#panel`, porque las acciones
+  preparadas tambien tienen "Pasar" e "Igualar").
+- Lab y LAN 0.2.1 reconstruidas e instaladas. `desktop-app-hand` VERDE con dos instancias de la Lab
+  instalada: mano en 1,6 min, ventana 1264x632 a 1,5x, sin scroll; capturas de turno, accion
+  preparada y fin de mano.
+
 ## Variante de red local (2026-10-08)
 
 Para jugar con otra persona en la misma red: el nodo y la señalización corren
