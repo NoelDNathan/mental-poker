@@ -228,6 +228,10 @@ Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favico
 - Lab y LAN 0.2.1 reconstruidas e instaladas. `desktop-app-hand` VERDE con dos instancias de la Lab
   instalada: mano en 1,6 min, ventana 1264x632 a 1,5x, sin scroll; capturas de turno, accion
   preparada y fin de mano.
+- Repaso (FE `21bfe77`..`cfaa49d`): el aviso de fin de mano dice la jugada del rival (la foto de la
+  mano se hacia despues de vaciar las manos), rivales en el arco de arriba con la barra inferior (nadie
+  bajo el panel ni el anillo) y spec `core-preaction`. Lab y LAN reinstaladas; `desktop-app-hand`
+  verde (1,9 min).
 
 ## Variante de red local (2026-10-08)
 
