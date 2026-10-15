@@ -233,6 +233,15 @@ Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favico
   bajo el panel ni el anillo) y spec `core-preaction`. Lab y LAN reinstaladas; `desktop-app-hand`
   verde (1,9 min).
 
+### 2026-10-15: auditoría mesa vs contrato (all-in, retiradas, 4 jugadores)
+
+- Tras la prueba manual del all-in con pilas distintas: 6 fallos de la mesa y 1 del contrato
+  (SC `a0a0676`: ante del recién llegado al ganar por retirada). La causa de los cuelgues con 4
+  jugadores era que un jugador retirado no revelaba las comunitarias (FE `e927bbc`, §9.3).
+- E2E nuevas: `allin-scenarios` (6 casos, 2-4 jugadores) y `multi-hand-4` (10 manos seguidas a 4
+  VERDE, 0 reclamos). Regresión B4 + preparadas + all-in 9/9. Lab y LAN reinstaladas;
+  `desktop-app-hand` verde (1,6 min); el aviso de fin de mano dice la fase de la siguiente.
+
 ## Variante de red local (2026-10-08)
 
 Para jugar con otra persona en la misma red: el nodo y la señalización corren
