@@ -19,7 +19,7 @@ use tauri::http::{Request, StatusCode};
 use super::common::*;
 
 /// Rutas del directorio publico que el nucleo necesita (nada mas se sirve).
-const PUBLIC_PREFIXES: [&str; 2] = ["/pkg-rayon-native-20261006/", "/precompute/vhyb/"];
+const PUBLIC_PREFIXES: [&str; 2] = ["/pkg-rayon-native-20261016/", "/precompute/vhyb/"];
 const PUBLIC_FILES: [&str; 1] = ["/release-manifest.json"];
 
 const IMMUTABLE: &str = "public, max-age=31536000, immutable, no-transform";
@@ -163,8 +163,8 @@ mod tests {
         let public = base.0.join("public");
         write(&dist.join("engine.html"), b"<html>engine</html>");
         write(&dist.join("assets/app.js"), b"console.log(1)");
-        write(&public.join("pkg-rayon-native-20261006/glue.js"), b"glue");
-        write(&public.join("pkg-rayon-native-20261006/m.wasm"), &[0, 0x61, 0x73, 0x6d]);
+        write(&public.join("pkg-rayon-native-20261016/glue.js"), b"glue");
+        write(&public.join("pkg-rayon-native-20261016/m.wasm"), &[0, 0x61, 0x73, 0x6d]);
         write(&public.join("precompute/vhyb/a.bin"), b"abcdef");
         write(&public.join("release-manifest.json"), b"{}");
         write(&public.join("pkg-rayon-viejo/x.js"), b"viejo");
@@ -280,8 +280,8 @@ mod tests {
     fn lista_blanca_de_prefijos_publicos() {
         let f = fx();
         for (p, ct, st) in [
-            ("/pkg-rayon-native-20261006/glue.js", "text/javascript; charset=utf-8", 200),
-            ("/pkg-rayon-native-20261006/m.wasm", "application/wasm", 200),
+            ("/pkg-rayon-native-20261016/glue.js", "text/javascript; charset=utf-8", 200),
+            ("/pkg-rayon-native-20261016/m.wasm", "application/wasm", 200),
             ("/precompute/vhyb/a.bin", "application/octet-stream", 200),
             ("/release-manifest.json", "application/json", 200),
             ("/pkg-rayon-viejo/x.js", "", 404),

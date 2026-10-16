@@ -24,7 +24,7 @@ import { copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readdirSync, 
 import { join, resolve } from "node:path";
 
 /** Lo que el nucleo pide a su origen (engine/server.mjs PUBLIC_PREFIXES). */
-const PUBLIC_DIRS = ["pkg-rayon-native-20261006", "precompute/vhyb"];
+const PUBLIC_DIRS = ["pkg-rayon-native-20261016", "precompute/vhyb"];
 
 function arg(name, def) {
   const i = process.argv.indexOf(`--${name}`);
