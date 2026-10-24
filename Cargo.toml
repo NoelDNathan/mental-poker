@@ -11,6 +11,7 @@ members = [
     "WebRTC-in-Rust/wasm_client",
     "WebRTC-in-Rust/signalling-server", 
     "WebRTC-in-Rust/shared-protocol",
+    "WebRTC-in-Rust/poker-protocol",
         "workspace-ark05/circom-witnesscalc",
     #"WebRTC-in-Rust/turn-server"
 ]
