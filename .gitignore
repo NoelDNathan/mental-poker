@@ -19,3 +19,7 @@ key.pub
 
 # Fase 2: carpeta de app reunida por desktop/scripts/stage-app.mjs
 /desktop/stage/
+
+# Intermedio de la ceremonia Groth16 local de card_cancellation_v5 (144 MB, pasa del limite de GitHub).
+# Copia fuera del repo: Poker/backups-mental-poker-2026-10-25/pot12_final.ptau
+workspace-ark05/circuits/card_cancellation_v5/card_cancellation_v5_js/pot12_final.ptau
