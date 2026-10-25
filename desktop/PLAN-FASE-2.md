@@ -142,11 +142,11 @@ build de release no la incluye.
 
 | Bloque | Estado | Commits |
 |---|---|---|
-| 2.0 | Hecho | wasm 519cca7 |
+| 2.0 | Hecho | wasm 7c5c870 |
 | 2.1 | Hecho: export de 6,3 MiB, CSP con 3 hashes | FE b611e7f |
-| 2.2 | Hecho | wasm 43c1e10 |
-| 2.3 | Hecho | wasm 43c1e10, FE 07a5c26 |
-| 2.4 | Hecho: instalador NSIS sin firmar de 63 MiB (`npx @tauri-apps/cli@2.12.1 build` en desktop/src-tauri) | wasm d81160b |
+| 2.2 | Hecho | wasm 3d82eda |
+| 2.3 | Hecho | wasm 3d82eda, FE 07a5c26 |
+| 2.4 | Hecho: instalador NSIS sin firmar de 63 MiB (`npx @tauri-apps/cli@2.12.1 build` en desktop/src-tauri) | wasm 152344e |
 | 2.5 | **VERDE**: `e2e/desktop-app-hand.spec.ts`, 2 instancias empaquetadas, 1 mano en 158 s, aislamiento comprobado, 14 entradas del pool nativas (9–15 s cada una con las dos instancias compitiendo por 8 hilos) | FE (ver git log) |
 
 Cómo se monta (lab):
@@ -161,8 +161,8 @@ Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favico
 
 ### 2026-10-11: app reconstruida con la auditoría 2026-10
 
-- Línea segura con la auditoría fusionada (FE `2553e1d`, wasm `3e125f1`/WebRTC `4f7e3d8`).
-- Arreglo propio de la app: CSP del núcleo con `blob:` (wasm `66c184b`), necesario desde el #1
+- Línea segura con la auditoría fusionada (FE `2553e1d`, wasm `fd6c4e7`/WebRTC `4f7e3d8`).
+- Arreglo propio de la app: CSP del núcleo con `blob:` (wasm `fe1d35f`), necesario desde el #1
   (glue del motor ejecutado desde los bytes verificados). Sin él: `Failed to fetch dynamically
   imported module: blob:...` y el núcleo no arranca.
 - `desktop-app-hand` VERDE con dos instancias empaquetadas: mano en 61 s, aislamiento intacto.
@@ -195,7 +195,7 @@ Pendiente menor: un 404 de un recurso al cargar la mesa (probablemente el favico
   (2) la ventana medía 1400x900 logicos y con la escala de Windows al 150 % no cabia en la pantalla.
 - FE `789647c`: la mesa se escala para caber (`Table fit`) y el dock va en columna propia (derecha
   desde `lg`, debajo en estrecho); sin scroll. `core-betting-panel` verde (mano + clickjacking).
-- wasm `5ea2476`: ventana ajustada al area util del monitor (min 900x600), con test unitario.
+- wasm `62527d2`: ventana ajustada al area util del monitor (min 900x600), con test unitario.
 - `desktop-app-hand` verde con la build nueva (ventana 1264x632 a 1,5x, sin scroll); Lab y LAN 0.2.1
   reinstaladas. Build desde los checkouts principales: `target` en `mental-poker-reshuffle/target`.
 
